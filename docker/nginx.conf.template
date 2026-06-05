@@ -17,6 +17,13 @@ http {
     uwsgi_temp_path /tmp/nginx-uwsgi;
     scgi_temp_path /tmp/nginx-scgi;
 
+    # Detect native gRPC vs gRPC-web based on Content-Type header
+    # $is_grpc_native = "1" for application/grpc (native), "" for grpc-web or other
+    map $http_content_type $is_grpc_native {
+        default         "";
+        "~^application/grpc(?!-web)" "1";
+    }
+
     server {
         listen 8080 http2;
         server_name _;
@@ -33,10 +40,17 @@ http {
             add_header Content-Type text/plain;
         }
 
-        # gRPC-web requests routed through the base path
-        # The browser fetch interceptor rewrites /rerun.* -> __BASE_PATH__/rerun.*
+        # gRPC requests through the base path — detect native gRPC vs gRPC-web
+        # Native gRPC (HTTP/2, content-type: application/grpc) uses grpc_pass
+        # gRPC-web (HTTP/1.1, from browser fetch interceptor) uses proxy_pass
         location ~ ^__BASE_PATH__/(rerun\..*)$ {
-            # Strip the base path, proxy to gRPC server
+            # Route native gRPC (h2c from Traefik or direct HTTP/2 clients)
+            if ($is_grpc_native) {
+                error_page 418 = @grpc_base_path;
+                return 418;
+            }
+
+            # gRPC-web: strip the base path, proxy to gRPC server
             proxy_pass http://127.0.0.1:9876/$1;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
@@ -57,15 +71,15 @@ http {
             }
         }
 
-        # Native gRPC from internal cluster clients (HTTP/2, no base path prefix)
-        location ~ ^/(rerun\..*)$ {
-            grpc_pass grpc://127.0.0.1:9876;
-            grpc_read_timeout 86400s;
-            grpc_send_timeout 86400s;
-        }
-
         # /proxy endpoint through base path
         location ~ ^__BASE_PATH__/proxy(/.*)?$ {
+            # Route native gRPC (h2c from Traefik or direct HTTP/2 clients)
+            if ($is_grpc_native) {
+                error_page 418 = @grpc_base_path;
+                return 418;
+            }
+
+            # gRPC-web / HTTP/1.1
             proxy_pass http://127.0.0.1:9876/proxy$1;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
@@ -74,6 +88,23 @@ http {
             proxy_request_buffering off;
             proxy_read_timeout 86400s;
             proxy_send_timeout 86400s;
+        }
+
+        # Internal named location for native gRPC via base path
+        # Strips the base path prefix before forwarding to the rerun gRPC server
+        location @grpc_base_path {
+            # Rewrite strips __BASE_PATH__ prefix, then grpc_pass forwards
+            rewrite ^__BASE_PATH__/(.*)$ /$1 break;
+            grpc_pass grpc://127.0.0.1:9876;
+            grpc_read_timeout 86400s;
+            grpc_send_timeout 86400s;
+        }
+
+        # Native gRPC from internal cluster clients (HTTP/2, no base path prefix)
+        location ~ ^/(rerun\..*)$ {
+            grpc_pass grpc://127.0.0.1:9876;
+            grpc_read_timeout 86400s;
+            grpc_send_timeout 86400s;
         }
 
         # /proxy endpoint without base path for internal SDK connections (HTTP/2 gRPC)
