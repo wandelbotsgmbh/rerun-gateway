@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir rerun-sdk==0.33.0
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf.template
 COPY nginx.conf.template /etc/nginx/nginx.conf.template
 COPY index.html.template /opt/rerun-gateway/index.html.template
 

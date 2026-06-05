@@ -51,7 +51,10 @@ curl -sk -X POST "https://<CLUSTER_IP>/api/v2/cells/cell/apps" \
       }
     },
     "port": 8080,
-    "health_path": "/healthz"
+    "health_path": "/healthz",
+    "environment": [
+      {"name": "RERUN_MEMORY_LIMIT", "value": "1GB"}
+    ]
   }'
 ```
 
