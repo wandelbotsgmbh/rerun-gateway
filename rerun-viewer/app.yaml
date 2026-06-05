@@ -1,0 +1,18 @@
+apiVersion: wandelbots.com/v1alpha1
+kind: App
+metadata:
+  name: rerun-viewer
+  namespace: cell
+spec:
+  appIcon: "https://raw.githubusercontent.com/rerun-io/rerun/main/crates/viewer/re_ui/data/logo_dark_mode.png"
+  cellName: cell
+  image: wandelbots.azurecr.io/rerun-gateway:latest
+  port: 8080
+  healthPath: /healthz
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
