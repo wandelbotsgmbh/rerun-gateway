@@ -1,51 +1,18 @@
-apiVersion: v1
-kind: Pod
+apiVersion: wandelbots.com/v1alpha1
+kind: App
 metadata:
   name: rerun-logger
   namespace: cell
-  labels:
-    app: rerun-logger
 spec:
-  restartPolicy: Never
-  containers:
-  - name: logger
-    image: python:3.11-slim
-    command:
-    - /bin/bash
-    - -c
-    - |
-      pip install rerun-sdk==0.33.0 numpy && \
-      python3 -u -c "
-      import rerun as rr
-      import numpy as np
-      import time
-
-      # Connect to the rerun server through the nginx proxy in the App CRD
-      rr.init('test_recording', spawn=False)
-      rr.connect_grpc('rerun+http://app-rerun-viewer.cell.svc.cluster.local:8080/proxy')
-
-      # Log some test data continuously
-      print('Logging test data...')
-
-      # Log many frames to ensure viewer can pick it up
-      for i in range(200):
-          positions = np.random.randn(100, 3).astype(np.float32)
-          colors = np.random.randint(0, 255, (100, 3), dtype=np.uint8)
-          rr.set_time('frame', sequence=i)
-          rr.log('world/points', rr.Points3D(positions, colors=colors, radii=0.05))
-          rr.log('world/text', rr.TextLog(f'Frame {i}: logged 100 random points'))
-          if i % 10 == 0:
-              print(f'Logged frame {i}')
-          time.sleep(0.5)
-
-      print('Done logging! Data should be visible in the viewer.')
-      time.sleep(30)
-      print('Logger finished.')
-      "
-    resources:
-      requests:
-        cpu: 50m
-        memory: 128Mi
-      limits:
-        cpu: 500m
-        memory: 512Mi
+  appIcon: "https://raw.githubusercontent.com/rerun-io/rerun/main/crates/viewer/re_ui/data/logo_dark_mode.png"
+  cellName: cell
+  image: wandelbots.azurecr.io/rerun-logger:latest
+  port: 8080
+  healthPath: /healthz
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi

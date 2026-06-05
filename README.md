@@ -125,8 +125,11 @@ docker/
   nginx.conf.template     # Dual-protocol proxy config
   index.html.template     # Viewer page with fetch interceptor
   supervisord.conf        # Manages nginx + rerun processes
+docker-logger/
+  Dockerfile              # Test logger image
+  logger.py               # Logs random 3D points to rerun-viewer
 k8s/
   rerun-app-crd.yaml      # App CRD manifest (alternative to API deploy)
-  rerun-logger.yaml       # Test pod that sends data to rerun
+  rerun-logger.yaml       # Logger App CRD manifest
 local-proxy.sh            # Local nginx wrapper for native viewer access
 ```
