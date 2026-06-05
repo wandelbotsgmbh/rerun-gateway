@@ -95,6 +95,27 @@ rr.connect_grpc("rerun+http://app-rerun-viewer.cell.svc.cluster.local:8080/proxy
 rr.log("world/points", rr.Points3D([[1, 2, 3]]))
 ```
 
+### Test logger app
+
+Deploy a test app that continuously logs random 3D points to the viewer:
+
+```bash
+curl -sk -X POST "https://<CLUSTER_IP>/api/v2/cells/cell/apps" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "rerun-logger",
+    "app_icon": "https://raw.githubusercontent.com/rerun-io/rerun/main/crates/viewer/re_ui/data/logo_dark_mode.png",
+    "container_image": {
+      "image": "wandelbots.azurecr.io/rerun-logger:latest",
+      "secrets": [
+        {"name": "pull-secret-wandelbots-azurecr-io"}
+      ]
+    },
+    "port": 8080,
+    "health_path": "/healthz"
+  }'
+```
+
 ## File Structure
 
 ```
