@@ -60,13 +60,6 @@ curl -sk -X POST "https://<CLUSTER_IP>/api/v2/cells/cell/apps" \
 
 Get the token with: `az acr login --name wandelbots --expose-token --output tsv --query accessToken`
 
-### 3. Enable native gRPC passthrough (for local viewer)
-
-```bash
-kubectl annotate service app-rerun-viewer -n cell \
-  "traefik.ingress.kubernetes.io/service.serversscheme=h2c"
-```
-
 ## Access
 
 ### Web viewer
@@ -79,7 +72,17 @@ Requires HTTPS (gRPC-web needs HTTP/2, browsers only negotiate it over TLS). Use
 
 ### Native viewer (from your machine)
 
+Requires kubectl access. Traefik downgrades backend traffic to HTTP/1.1 by
+default, which breaks native gRPC. A one-time service annotation is needed to
+enable HTTP/2 (h2c) passthrough, and the App CRD API does not expose service
+annotations. Without kubectl, use the web viewer.
+
 ```bash
+# One-time: enable h2c on the service (requires kubectl)
+kubectl annotate service app-rerun-viewer -n cell \
+  "traefik.ingress.kubernetes.io/service.serversscheme=h2c"
+
+# Run the local proxy
 brew install nginx
 ./local-proxy.sh <CLUSTER_IP>
 # Then: rerun +http://127.0.0.1:9876/proxy

@@ -2,14 +2,21 @@
 # Local gRPC proxy for connecting native Rerun viewer to a remote cluster.
 # Uses nginx to handle HTTP/2 gRPC streaming properly.
 #
+# WHY THIS NEEDS KUBECTL:
+#   Native gRPC requires HTTP/2 end-to-end. Traefik (the cluster ingress)
+#   downgrades all backend traffic to HTTP/1.1 by default, which breaks
+#   native gRPC framing. The only way to make Traefik use HTTP/2 (h2c) to
+#   the backend is a service annotation — and the App CRD API does not
+#   expose service annotations. So kubectl is required for this one-time
+#   setup. Without it, use the web viewer instead.
+#
 # Prerequisites:
-#   brew install nginx   # macOS
-#   # The cluster service needs h2c annotation (one-time):
+#   brew install nginx
 #   kubectl annotate service app-rerun-viewer -n cell \
 #     "traefik.ingress.kubernetes.io/service.serversscheme=h2c"
 #
 # Usage:
-#   ./local-proxy.sh 172.31.12.2
+#   ./local-proxy.sh <cluster-ip> [port] [base-path]
 #
 # Then connect:
 #   rerun +http://127.0.0.1:9876/proxy
