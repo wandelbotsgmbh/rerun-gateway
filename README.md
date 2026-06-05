@@ -30,7 +30,7 @@ Native viewer via local-proxy.sh (native gRPC)
 
 ```bash
 az acr login --name wandelbots
-docker build -t wandelbots.azurecr.io/rerun-gateway:latest ./docker/
+docker build -t wandelbots.azurecr.io/rerun-gateway:latest ./rerun-viewer/
 docker push wandelbots.azurecr.io/rerun-gateway:latest
 ```
 
@@ -82,7 +82,7 @@ kubectl annotate service app-rerun-viewer -n cell \
 
 # Run the local proxy
 brew install nginx
-./local-proxy.sh <CLUSTER_IP>
+./rerun-viewer/local-proxy.sh <CLUSTER_IP>
 # Then: rerun +http://127.0.0.1:9876/proxy
 ```
 
@@ -119,17 +119,16 @@ curl -sk -X POST "https://<CLUSTER_IP>/api/v2/cells/cell/apps" \
 ## File Structure
 
 ```
-docker/
+rerun-viewer/
   Dockerfile              # python:3.11-slim + nginx + supervisor + rerun
   entrypoint.sh           # Generates nginx.conf from BASE_PATH env var
   nginx.conf.template     # Dual-protocol proxy config
   index.html.template     # Viewer page with fetch interceptor
   supervisord.conf        # Manages nginx + rerun processes
-docker-logger/
+  app.yaml                # App CRD manifest (alternative to API deploy)
+  local-proxy.sh          # Local nginx wrapper for native viewer access
+rerun-logger-test/
   Dockerfile              # Test logger image
   logger.py               # Logs random 3D points to rerun-viewer
-k8s/
-  rerun-app-crd.yaml      # App CRD manifest (alternative to API deploy)
-  rerun-logger.yaml       # Logger App CRD manifest
-local-proxy.sh            # Local nginx wrapper for native viewer access
+  app.yaml                # App CRD manifest
 ```
