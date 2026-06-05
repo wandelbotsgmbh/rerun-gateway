@@ -6,5 +6,6 @@
   "features": {
     "ghcr.io/devcontainers/features/python:1": {}
   },
-  "remoteUser": "root"
+  "remoteUser": "root",
+  "postStartCommand": "cat /var/run/secrets/kubernetes.io/serviceaccount/ca.crt >> /etc/ssl/certs/ca-certificates.crt 2>/dev/null || true"
 }
