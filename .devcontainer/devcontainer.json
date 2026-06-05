@@ -1,0 +1,4 @@
+{
+  "name": "rerun-gateway",
+  "image": "mcr.microsoft.com/devcontainers/base:debian"
+}
