@@ -44,11 +44,9 @@ curl -sk -X POST "https://<CLUSTER_IP>/api/v2/cells/cell/apps" \
     "app_icon": "https://raw.githubusercontent.com/rerun-io/rerun/main/crates/viewer/re_ui/data/logo_dark_mode.png",
     "container_image": {
       "image": "wandelbots.azurecr.io/rerun-gateway:latest",
-      "credentials": {
-        "registry": "wandelbots.azurecr.io",
-        "user": "00000000-0000-0000-0000-000000000000",
-        "password": "<ACR_TOKEN>"
-      }
+      "secrets": [
+        {"name": "pull-secret-wandelbots-azurecr-io"}
+      ]
     },
     "port": 8080,
     "health_path": "/healthz",
@@ -58,7 +56,7 @@ curl -sk -X POST "https://<CLUSTER_IP>/api/v2/cells/cell/apps" \
   }'
 ```
 
-Get the token with: `az acr login --name wandelbots --expose-token --output tsv --query accessToken`
+The `secrets` field references an existing image pull secret in the cluster — no inline credentials needed.
 
 ## Access
 
