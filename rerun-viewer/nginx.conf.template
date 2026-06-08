@@ -11,6 +11,10 @@ http {
     default_type application/octet-stream;
     access_log /dev/stdout;
 
+    # Allow unlimited request body size for gRPC streaming (default 1MB is too small
+    # for rerun SDK WriteMessages which sends ~1MB+ batches)
+    client_max_body_size 0;
+
     client_body_temp_path /tmp/nginx-body;
     proxy_temp_path /tmp/nginx-proxy;
     fastcgi_temp_path /tmp/nginx-fastcgi;

@@ -6,7 +6,7 @@ metadata:
 spec:
   appIcon: "https://raw.githubusercontent.com/rerun-io/rerun/main/crates/viewer/re_ui/data/logo_dark_mode.png"
   cellName: cell
-  image: wandelbots.azurecr.io/rerun-logger:latest
+  image: wandelbots.azurecr.io/rerun-logger:0.2.0
   port: 8080
   healthPath: /healthz
   resources:

@@ -16,7 +16,7 @@ class Health(BaseHTTPRequestHandler):
 threading.Thread(target=lambda: HTTPServer(("", 8080), Health).serve_forever(), daemon=True).start()
 
 rr.init("test_recording", spawn=False)
-rr.connect_grpc("rerun+http://app-rerun-viewer.cell.svc.cluster.local:8080/proxy")
+rr.connect_grpc("rerun+http://app-rerun-viewer:8080/proxy")
 
 print("Logging test data...")
 i = 0

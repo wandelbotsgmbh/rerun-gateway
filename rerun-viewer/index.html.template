@@ -50,20 +50,51 @@
       // =======================================================
       // MITM Fetch Interceptor for gRPC-web
       // =======================================================
-      // The Rerun WASM viewer sends gRPC-web POST requests to
-      // http://<host>/rerun.sdk_comms.v1alpha1.MessageProxyService/ReadMessages
-      // (at the host ROOT). But the App CRD only allows traffic at
-      // __BASE_PATH__/*. So we intercept fetch() and rewrite
-      // these gRPC URLs to go through our base path.
+      // The Rerun WASM viewer sends gRPC-web requests to the host
+      // ROOT (e.g. /rerun.Service/Method or /proxy). But the App
+      // CRD only allows traffic at __BASE_PATH__/*. So we intercept
+      // fetch() and rewrite these URLs to go through our base path.
+      //
+      // Also includes a Safari workaround: Safari does not support
+      // ReadableStream as a fetch() request body. We buffer it into
+      // a Uint8Array before sending (safe for gRPC-web requests
+      // which are small).
       // =======================================================
 
       (function() {
         const BASE_PATH = '__BASE_PATH__';
         const originalFetch = window.fetch;
 
+        // Helper: buffer a ReadableStream into a single Uint8Array
+        function bufferStream(stream) {
+          var reader = stream.getReader();
+          var chunks = [];
+          return new Promise(function(resolve, reject) {
+            function pump() {
+              reader.read().then(function(result) {
+                if (result.done) {
+                  var totalLength = chunks.reduce(function(acc, c) { return acc + c.length; }, 0);
+                  var buffer = new Uint8Array(totalLength);
+                  var offset = 0;
+                  chunks.forEach(function(chunk) {
+                    buffer.set(chunk, offset);
+                    offset += chunk.length;
+                  });
+                  resolve(buffer);
+                } else {
+                  chunks.push(result.value);
+                  pump();
+                }
+              }).catch(reject);
+            }
+            pump();
+          });
+        }
+
         window.fetch = function(input, init) {
-          let url;
-          let isRequest = (input instanceof Request);
+          var url;
+          var isRequest = (input instanceof Request);
+          var originalRequest = isRequest ? input : null;
 
           if (isRequest) {
             url = input.url;
@@ -71,21 +102,51 @@
             url = String(input);
           }
 
-          // Check if this is a gRPC-web request to a rerun service at the root
+          // Check if this is a rerun request at the root that needs rewriting
           try {
-            const parsed = new URL(url, window.location.origin);
-            if (parsed.origin === window.location.origin && parsed.pathname.match(/^\/rerun\./)) {
+            var parsed = new URL(url, window.location.origin);
+            if (parsed.origin === window.location.origin &&
+                (parsed.pathname.match(/^\/rerun\./) || parsed.pathname.match(/^\/proxy(\/|$)/))) {
               // Rewrite: /rerun.Service/Method -> BASE_PATH/rerun.Service/Method
-              const newPath = BASE_PATH + parsed.pathname;
+              //          /proxy/...            -> BASE_PATH/proxy/...
+              var newPath = BASE_PATH + parsed.pathname;
               parsed.pathname = newPath;
-              const newUrl = parsed.toString();
-              console.debug('[rerun-gateway] Rewriting gRPC URL:', url, '->', newUrl);
+              var newUrl = parsed.toString();
+              console.debug('[rerun-gateway] Rewriting URL:', url, '->', newUrl);
 
-              if (isRequest) {
-                input = new Request(newUrl, input);
-              } else {
-                input = newUrl;
+              // Extract body (may be a ReadableStream from gRPC-web WASM client)
+              var body = originalRequest ? originalRequest.body : (init && init.body);
+
+              // Build minimal init for the rewritten request.
+              // Only include method, headers, body, and credentials.
+              // Avoid copying mode/cache/redirect/referrer from the original request
+              // as they can conflict with cloud auth proxies.
+              var newInit = {
+                method: originalRequest ? originalRequest.method : (init && init.method) || 'POST',
+                headers: originalRequest ? originalRequest.headers : (init && init.headers),
+                credentials: 'include'
+              };
+
+              // If body is a ReadableStream, buffer it first.
+              // Chrome requires HTTP/2 for streaming bodies (ERR_ALPN_NEGOTIATION_FAILED)
+              // and Safari doesn't support ReadableStream upload at all.
+              if (body && typeof body.getReader === 'function') {
+                return bufferStream(body).then(function(buffered) {
+                  newInit.body = buffered;
+                  console.debug('[rerun-gateway] Sending buffered request:', newUrl, 'body size:', buffered.length);
+                  return originalFetch.call(this, newUrl, newInit).catch(function(err) {
+                    console.error('[rerun-gateway] Fetch failed:', err.message, 'url:', newUrl);
+                    throw err;
+                  });
+                }.bind(this));
               }
+
+              newInit.body = body;
+              console.debug('[rerun-gateway] Sending request:', newUrl);
+              return originalFetch.call(this, newUrl, newInit).catch(function(err) {
+                console.error('[rerun-gateway] Fetch failed:', err.message, 'url:', newUrl);
+                throw err;
+              });
             }
           } catch(e) {
             // If URL parsing fails, pass through unchanged
@@ -134,8 +195,7 @@
         const params = new URLSearchParams(window.location.search);
         if (!params.has('url')) {
           const proto = window.location.protocol === 'https:' ? 'rerun+https:' : 'rerun+http:';
-          const basePath = '__BASE_PATH__';
-          const connUrl = proto + '//' + window.location.host + basePath + '/proxy';
+          const connUrl = proto + '//' + window.location.host + '/proxy';
           params.set('url', connUrl);
           const newUrl = window.location.pathname + '?' + params.toString();
           window.history.replaceState({}, '', newUrl);
