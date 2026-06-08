@@ -65,13 +65,36 @@
         const BASE_PATH = '__BASE_PATH__';
         const originalFetch = window.fetch;
 
-        // Detect Safari/WebKit (no ReadableStream upload support)
-        var needsStreamWorkaround = !window.WritableStream ||
-          (navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome'));
+        // Helper: buffer a ReadableStream into a single Uint8Array
+        function bufferStream(stream) {
+          var reader = stream.getReader();
+          var chunks = [];
+          return new Promise(function(resolve, reject) {
+            function pump() {
+              reader.read().then(function(result) {
+                if (result.done) {
+                  var totalLength = chunks.reduce(function(acc, c) { return acc + c.length; }, 0);
+                  var buffer = new Uint8Array(totalLength);
+                  var offset = 0;
+                  chunks.forEach(function(chunk) {
+                    buffer.set(chunk, offset);
+                    offset += chunk.length;
+                  });
+                  resolve(buffer);
+                } else {
+                  chunks.push(result.value);
+                  pump();
+                }
+              }).catch(reject);
+            }
+            pump();
+          });
+        }
 
         window.fetch = function(input, init) {
-          let url;
-          let isRequest = (input instanceof Request);
+          var url;
+          var isRequest = (input instanceof Request);
+          var originalRequest = isRequest ? input : null;
 
           if (isRequest) {
             url = input.url;
@@ -80,82 +103,59 @@
           }
 
           // Check if this is a rerun request at the root that needs rewriting
-          var rewritten = false;
           try {
-            const parsed = new URL(url, window.location.origin);
+            var parsed = new URL(url, window.location.origin);
             if (parsed.origin === window.location.origin &&
                 (parsed.pathname.match(/^\/rerun\./) || parsed.pathname.match(/^\/proxy(\/|$)/))) {
               // Rewrite: /rerun.Service/Method -> BASE_PATH/rerun.Service/Method
               //          /proxy/...            -> BASE_PATH/proxy/...
-              const newPath = BASE_PATH + parsed.pathname;
+              var newPath = BASE_PATH + parsed.pathname;
               parsed.pathname = newPath;
-              const newUrl = parsed.toString();
+              var newUrl = parsed.toString();
               console.debug('[rerun-gateway] Rewriting URL:', url, '->', newUrl);
 
-              if (isRequest) {
-                input = new Request(newUrl, input);
-              } else {
-                input = newUrl;
+              // Extract body (may be a ReadableStream from gRPC-web WASM client)
+              var body = originalRequest ? originalRequest.body : (init && init.body);
+
+              // Build minimal init for the rewritten request.
+              // Only include method, headers, body, and credentials.
+              // Avoid copying mode/cache/redirect/referrer from the original request
+              // as they can conflict with cloud auth proxies.
+              var newInit = {
+                method: originalRequest ? originalRequest.method : (init && init.method) || 'POST',
+                headers: originalRequest ? originalRequest.headers : (init && init.headers),
+                credentials: 'include'
+              };
+
+              // If body is a ReadableStream, buffer it first.
+              // Chrome requires HTTP/2 for streaming bodies (ERR_ALPN_NEGOTIATION_FAILED)
+              // and Safari doesn't support ReadableStream upload at all.
+              if (body && typeof body.getReader === 'function') {
+                return bufferStream(body).then(function(buffered) {
+                  newInit.body = buffered;
+                  console.debug('[rerun-gateway] Sending buffered request:', newUrl, 'body size:', buffered.length);
+                  return originalFetch.call(this, newUrl, newInit).catch(function(err) {
+                    console.error('[rerun-gateway] Fetch failed:', err.message, 'url:', newUrl);
+                    throw err;
+                  });
+                }.bind(this));
               }
-              rewritten = true;
+
+              newInit.body = body;
+              console.debug('[rerun-gateway] Sending request:', newUrl);
+              return originalFetch.call(this, newUrl, newInit).catch(function(err) {
+                console.error('[rerun-gateway] Fetch failed:', err.message, 'url:', newUrl);
+                throw err;
+              });
             }
           } catch(e) {
             // If URL parsing fails, pass through unchanged
           }
 
-          // Safari workaround: buffer ReadableStream bodies into Uint8Array
-          if (needsStreamWorkaround) {
-            var body = isRequest ? input.body : (init && init.body);
-            if (body && typeof body.getReader === 'function') {
-              return new Promise(function(resolve, reject) {
-                var reader = body.getReader();
-                var chunks = [];
-                function pump() {
-                  reader.read().then(function(result) {
-                    if (result.done) {
-                      // Concatenate chunks into a single Uint8Array
-                      var totalLength = chunks.reduce(function(acc, c) { return acc + c.length; }, 0);
-                      var buffer = new Uint8Array(totalLength);
-                      var offset = 0;
-                      chunks.forEach(function(chunk) {
-                        buffer.set(chunk, offset);
-                        offset += chunk.length;
-                      });
-
-                      // Replace body with the buffered data
-                      if (isRequest || input instanceof Request) {
-                        var reqInit = {
-                          method: input.method,
-                          headers: input.headers,
-                          body: buffer,
-                          mode: input.mode,
-                          credentials: input.credentials,
-                          cache: input.cache,
-                          redirect: input.redirect,
-                          referrer: input.referrer,
-                          integrity: input.integrity
-                        };
-                        resolve(originalFetch.call(this, input.url, reqInit));
-                      } else {
-                        init = Object.assign({}, init, { body: buffer });
-                        resolve(originalFetch.call(this, input, init));
-                      }
-                    } else {
-                      chunks.push(result.value);
-                      pump();
-                    }
-                  }.bind(this)).catch(reject);
-                }
-                pump.call(this);
-              }.bind(this));
-            }
-          }
-
           return originalFetch.call(this, input, init);
         };
 
-        console.info('[rerun-gateway] Fetch interceptor installed. BASE_PATH=' + BASE_PATH +
-          (needsStreamWorkaround ? ' (with Safari ReadableStream workaround)' : ''));
+        console.info('[rerun-gateway] Fetch interceptor installed. BASE_PATH=' + BASE_PATH);
       })();
     </script>
   </head>
