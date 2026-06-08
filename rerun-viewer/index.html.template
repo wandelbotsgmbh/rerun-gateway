@@ -9,6 +9,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
 
   <head>
+    <base href="__BASE_PATH__/" />
     <title>Rerun Viewer</title>
     <style>
       html {
@@ -133,7 +134,8 @@
         const params = new URLSearchParams(window.location.search);
         if (!params.has('url')) {
           const proto = window.location.protocol === 'https:' ? 'rerun+https:' : 'rerun+http:';
-          const connUrl = proto + '//' + window.location.host + '/proxy';
+          const basePath = '__BASE_PATH__';
+          const connUrl = proto + '//' + window.location.host + basePath + '/proxy';
           params.set('url', connUrl);
           const newUrl = window.location.pathname + '?' + params.toString();
           window.history.replaceState({}, '', newUrl);

@@ -114,16 +114,20 @@ http {
             grpc_send_timeout 86400s;
         }
 
-        # Serve our custom index.html at the base path root
+        # Redirect base path without trailing slash to with trailing slash
+        # This ensures relative URLs (re_viewer.js, re_viewer_bg.wasm) resolve correctly
         location = __BASE_PATH__ {
-            root /opt/rerun-gateway;
-            try_files /index.html =404;
-            default_type text/html;
+            return 301 __BASE_PATH__/;
         }
         location = __BASE_PATH__/ {
             root /opt/rerun-gateway;
             try_files /index.html =404;
             default_type text/html;
+        }
+
+        # Serve the app icon locally
+        location = __BASE_PATH__/logo_dark_mode.png {
+            alias /opt/rerun-gateway/logo_dark_mode.png;
         }
 
         # Proxy all other base path requests to rerun web viewer

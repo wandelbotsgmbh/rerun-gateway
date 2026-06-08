@@ -4,7 +4,7 @@ metadata:
   name: rerun-viewer
   namespace: cell
 spec:
-  appIcon: "https://raw.githubusercontent.com/rerun-io/rerun/main/crates/viewer/re_ui/data/logo_dark_mode.png"
+  appIcon: "logo_dark_mode.png"
   cellName: cell
   image: wandelbots.azurecr.io/rerun-gateway:latest
   port: 8080
