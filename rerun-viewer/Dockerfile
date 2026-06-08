@@ -1,4 +1,5 @@
-FROM python:3.11-slim AS base
+ARG RERUN_SDK_VERSION=0.33.0
+FROM wandelbots.azurecr.io/docker.io/library/python:3.12-slim AS base
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     nginx \
@@ -6,7 +7,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir rerun-sdk==0.33.0
+ARG RERUN_SDK_VERSION
+RUN pip install --no-cache-dir rerun-sdk==${RERUN_SDK_VERSION}
 
 # Download app icon for self-hosting (avoids external URL issues on the platform dashboard)
 RUN mkdir -p /opt/rerun-gateway && \
