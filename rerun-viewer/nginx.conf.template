@@ -32,6 +32,10 @@ http {
         listen 8080 http2;
         server_name _;
 
+        # Don't include the internal port (8080) in redirect URLs — the platform
+        # ingress handles external port mapping (443 → 8080).
+        absolute_redirect off;
+
         # Health check at the base path
         location = __BASE_PATH__/healthz {
             return 200 'ok';
