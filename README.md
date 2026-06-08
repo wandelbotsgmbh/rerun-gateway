@@ -26,24 +26,41 @@ Native viewer via local-proxy.sh (native gRPC)
 
 ## Deploy
 
-### 1. Build and push image
+### 1. Build and push image (manual)
+
+Only needed if not using CI. The image must be built for `linux/amd64`:
 
 ```bash
 az acr login --name wandelbots
-docker build -t wandelbots.azurecr.io/rerun-gateway:latest ./rerun-viewer/
-docker push wandelbots.azurecr.io/rerun-gateway:latest
+docker buildx build --platform linux/amd64 \
+  -t wandelbots.azurecr.io/rerun-gateway:0.1.0 \
+  -t wandelbots.azurecr.io/rerun-gateway:latest \
+  --push ./rerun-viewer/
 ```
+
+### 1b. Build via CI (automatic)
+
+On merge to `main`, the GitLab CI pipeline builds and pushes `wandelbots.azurecr.io/rerun-gateway:latest`.
+
+To publish a versioned release, create a git tag:
+
+```bash
+git tag v0.2.0
+git push --tags
+```
+
+CI will push both `:0.2.0` and `:latest`.
 
 ### 2. Deploy via API
 
 ```bash
-curl -sk -X POST "https://<CLUSTER_IP>/api/v2/cells/cell/apps" \
+curl -sk -X POST "https://<INSTANCE_HOST>/api/v2/cells/cell/apps" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "rerun-viewer",
-    "app_icon": "https://raw.githubusercontent.com/rerun-io/rerun/main/crates/viewer/re_ui/data/logo_dark_mode.png",
+    "app_icon": "logo_dark_mode.png",
     "container_image": {
-      "image": "wandelbots.azurecr.io/rerun-gateway:latest",
+      "image": "wandelbots.azurecr.io/rerun-gateway:0.1.0",
       "secrets": [
         {"name": "pull-secret-wandelbots-azurecr-io"}
       ]
@@ -56,14 +73,37 @@ curl -sk -X POST "https://<CLUSTER_IP>/api/v2/cells/cell/apps" \
   }'
 ```
 
-The `secrets` field references an existing image pull secret in the cluster — no inline credentials needed.
+The `secrets` field references an existing image pull secret in the cluster.
+
+### 3. Update an existing deployment
+
+To update the image version of a running app:
+
+```bash
+curl -sk -X PATCH "https://<INSTANCE_HOST>/api/v2/cells/cell/apps/rerun-viewer" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "container_image": {
+      "image": "wandelbots.azurecr.io/rerun-gateway:0.2.0",
+      "secrets": [
+        {"name": "pull-secret-wandelbots-azurecr-io"}
+      ]
+    }
+  }'
+```
+
+### 4. Delete the app
+
+```bash
+curl -sk -X DELETE "https://<INSTANCE_HOST>/api/v2/cells/cell/apps/rerun-viewer"
+```
 
 ## Access
 
 ### Web viewer
 
 ```
-https://<CLUSTER_IP>/cell/rerun-viewer/
+https://<INSTANCE_HOST>/cell/rerun-viewer/
 ```
 
 Requires HTTPS (gRPC-web needs HTTP/2, browsers only negotiate it over TLS). Use `--ignore-certificate-errors` in Chrome for self-signed certs.
@@ -82,7 +122,7 @@ kubectl annotate service app-rerun-viewer -n cell \
 
 # Run the local proxy
 brew install nginx
-./rerun-viewer/local-proxy.sh <CLUSTER_IP>
+./rerun-viewer/local-proxy.sh <INSTANCE_HOST>
 # Then: rerun +http://127.0.0.1:9876/proxy
 ```
 
@@ -100,11 +140,11 @@ rr.log("world/points", rr.Points3D([[1, 2, 3]]))
 Deploy a test app that continuously logs random 3D points to the viewer:
 
 ```bash
-curl -sk -X POST "https://<CLUSTER_IP>/api/v2/cells/cell/apps" \
+curl -sk -X POST "https://<INSTANCE_HOST>/api/v2/cells/cell/apps" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "rerun-logger",
-    "app_icon": "https://raw.githubusercontent.com/rerun-io/rerun/main/crates/viewer/re_ui/data/logo_dark_mode.png",
+    "app_icon": "logo_dark_mode.png",
     "container_image": {
       "image": "wandelbots.azurecr.io/rerun-logger:latest",
       "secrets": [
@@ -119,6 +159,7 @@ curl -sk -X POST "https://<CLUSTER_IP>/api/v2/cells/cell/apps" \
 ## File Structure
 
 ```
+.gitlab-ci.yml            # CI pipeline: build, lint, publish
 rerun-viewer/
   Dockerfile              # python:3.11-slim + nginx + supervisor + rerun
   entrypoint.sh           # Generates nginx.conf from BASE_PATH env var
