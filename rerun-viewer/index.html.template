@@ -50,11 +50,10 @@
       // =======================================================
       // MITM Fetch Interceptor for gRPC-web
       // =======================================================
-      // The Rerun WASM viewer sends gRPC-web POST requests to
-      // http://<host>/rerun.sdk_comms.v1alpha1.MessageProxyService/ReadMessages
-      // (at the host ROOT). But the App CRD only allows traffic at
-      // __BASE_PATH__/*. So we intercept fetch() and rewrite
-      // these gRPC URLs to go through our base path.
+      // The Rerun WASM viewer sends gRPC-web requests to the host
+      // ROOT (e.g. /rerun.Service/Method or /proxy). But the App
+      // CRD only allows traffic at __BASE_PATH__/*. So we intercept
+      // fetch() and rewrite these URLs to go through our base path.
       // =======================================================
 
       (function() {
@@ -71,15 +70,17 @@
             url = String(input);
           }
 
-          // Check if this is a gRPC-web request to a rerun service at the root
+          // Check if this is a rerun request at the root that needs rewriting
           try {
             const parsed = new URL(url, window.location.origin);
-            if (parsed.origin === window.location.origin && parsed.pathname.match(/^\/rerun\./)) {
+            if (parsed.origin === window.location.origin &&
+                (parsed.pathname.match(/^\/rerun\./) || parsed.pathname.match(/^\/proxy(\/|$)/))) {
               // Rewrite: /rerun.Service/Method -> BASE_PATH/rerun.Service/Method
+              //          /proxy/...            -> BASE_PATH/proxy/...
               const newPath = BASE_PATH + parsed.pathname;
               parsed.pathname = newPath;
               const newUrl = parsed.toString();
-              console.debug('[rerun-gateway] Rewriting gRPC URL:', url, '->', newUrl);
+              console.debug('[rerun-gateway] Rewriting URL:', url, '->', newUrl);
 
               if (isRequest) {
                 input = new Request(newUrl, input);
@@ -134,8 +135,7 @@
         const params = new URLSearchParams(window.location.search);
         if (!params.has('url')) {
           const proto = window.location.protocol === 'https:' ? 'rerun+https:' : 'rerun+http:';
-          const basePath = '__BASE_PATH__';
-          const connUrl = proto + '//' + window.location.host + basePath + '/proxy';
+          const connUrl = proto + '//' + window.location.host + '/proxy';
           params.set('url', connUrl);
           const newUrl = window.location.pathname + '?' + params.toString();
           window.history.replaceState({}, '', newUrl);
