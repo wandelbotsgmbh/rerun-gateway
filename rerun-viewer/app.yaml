@@ -6,7 +6,7 @@ metadata:
 spec:
   appIcon: "logo_dark_mode.png"
   cellName: cell
-  image: wandelbots.azurecr.io/rerun-gateway:latest
+  image: wandelbots.azurecr.io/rerun-gateway:0.1.0
   port: 8080
   healthPath: /healthz
   resources:
