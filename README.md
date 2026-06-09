@@ -6,7 +6,6 @@ Deploy [Rerun](https://rerun.io) as a Wandelbots App on a service manager cluste
 
 The App CRD routes traffic at `/<cell>/<app-name>/*`. Rerun's WASM viewer sends gRPC-web requests to the host root (`/rerun.Service/Method`), which falls outside the allowed path. Additionally:
 
-- The platform enforces a 1000Mi memory cap on app pods
 - Nginx's default 1MB request body limit silently drops gRPC WriteMessages from the SDK
 - Browsers require credentials and stream buffering for requests through oauth2-proxy
 
@@ -54,25 +53,31 @@ CI will push `:<version>`.
 
 ### 2. Deploy via API
 
+Use the **v2 API** (snake_case fields, supports `resources.memory_limit`):
+
 ```bash
-curl -s -X POST "https://<INSTANCE_HOST>/api/v1/cells/cell/apps" \
+curl -s -X POST "https://<INSTANCE_HOST>/api/v2/cells/cell/apps" \
   -H "Content-Type: application/json" \
   -H "Cookie: _oauth2_proxy=<AUTH_COOKIE>" \
   -d '{
     "name": "rerun-viewer",
-    "appIcon": "logo_dark_mode.png",
-    "containerImage": {
-      "image": "wandelbots.azurecr.io/rerun-gateway:0.1.8",
+    "app_icon": "logo_dark_mode.png",
+    "container_image": {
+      "image": "wandelbots.azurecr.io/nova-apps/rerun-gateway:1.0.2",
       "secrets": [{"name": "pull-secret-wandelbots-azurecr-io"}]
     },
     "environment": [
-      {"name": "RERUN_MEMORY_LIMIT", "value": "500MB"}
+      {"name": "RERUN_MEMORY_LIMIT", "value": "1000MB"}
     ],
+    "resources": {
+      "memory_limit": "2000Mi"
+    },
     "port": 8080
   }'
 ```
 
-- `RERUN_MEMORY_LIMIT` controls how much data the server stores before dropping oldest entries. Default is `500MB` (leaves headroom within the platform's 1000Mi pod cap for nginx/OS).
+- `resources.memory_limit` sets the pod memory ceiling. Must be at least 2× the `RERUN_MEMORY_LIMIT` to leave headroom for GC spikes.
+- `RERUN_MEMORY_LIMIT` controls how much data the server stores before dropping oldest entries. Default is `1000MB`.
 - The `secrets` field references an existing image pull secret in the cluster.
 
 ### 3. Update an existing deployment
@@ -80,19 +85,22 @@ curl -s -X POST "https://<INSTANCE_HOST>/api/v1/cells/cell/apps" \
 Use PUT with the full app spec (the API does not support partial PATCH):
 
 ```bash
-curl -s -X PUT "https://<INSTANCE_HOST>/api/v1/cells/cell/apps/rerun-viewer" \
+curl -s -X PUT "https://<INSTANCE_HOST>/api/v2/cells/cell/apps/rerun-viewer" \
   -H "Content-Type: application/json" \
   -H "Cookie: _oauth2_proxy=<AUTH_COOKIE>" \
   -d '{
     "name": "rerun-viewer",
-    "appIcon": "logo_dark_mode.png",
-    "containerImage": {
-      "image": "wandelbots.azurecr.io/rerun-gateway:0.1.8",
+    "app_icon": "logo_dark_mode.png",
+    "container_image": {
+      "image": "wandelbots.azurecr.io/nova-apps/rerun-gateway:1.0.2",
       "secrets": [{"name": "pull-secret-wandelbots-azurecr-io"}]
     },
     "environment": [
-      {"name": "RERUN_MEMORY_LIMIT", "value": "500MB"}
+      {"name": "RERUN_MEMORY_LIMIT", "value": "1000MB"}
     ],
+    "resources": {
+      "memory_limit": "2000Mi"
+    },
     "port": 8080
   }'
 ```
@@ -100,7 +108,7 @@ curl -s -X PUT "https://<INSTANCE_HOST>/api/v1/cells/cell/apps/rerun-viewer" \
 ### 4. Delete the app
 
 ```bash
-curl -s -X DELETE "https://<INSTANCE_HOST>/api/v1/cells/cell/apps/rerun-viewer" \
+curl -s -X DELETE "https://<INSTANCE_HOST>/api/v2/cells/cell/apps/rerun-viewer" \
   -H "Cookie: _oauth2_proxy=<AUTH_COOKIE>"
 ```
 
@@ -149,14 +157,14 @@ brew install nginx
 Deploy a test app that continuously logs random 3D points:
 
 ```bash
-curl -s -X POST "https://<INSTANCE_HOST>/api/v1/cells/cell/apps" \
+curl -s -X POST "https://<INSTANCE_HOST>/api/v2/cells/cell/apps" \
   -H "Content-Type: application/json" \
   -H "Cookie: _oauth2_proxy=<AUTH_COOKIE>" \
   -d '{
     "name": "rerun-logger",
-    "appIcon": "logo_dark_mode.png",
-    "containerImage": {
-      "image": "wandelbots.azurecr.io/rerun-logger:0.2.0",
+    "app_icon": "logo_dark_mode.png",
+    "container_image": {
+      "image": "wandelbots.azurecr.io/rerun-logger:0.3.1",
       "secrets": [{"name": "pull-secret-wandelbots-azurecr-io"}]
     },
     "port": 8080
@@ -168,7 +176,7 @@ curl -s -X POST "https://<INSTANCE_HOST>/api/v1/cells/cell/apps" \
 | Environment Variable | Default | Description |
 |---------------------|---------|-------------|
 | `BASE_PATH` | `/cell/rerun-viewer` | Set automatically by the App CRD operator |
-| `RERUN_MEMORY_LIMIT` | `500MB` | Max memory for stored data (oldest dropped when exceeded) |
+| `RERUN_MEMORY_LIMIT` | `1000MB` | Max memory for stored data (oldest dropped when exceeded). Pod `memory_limit` should be at least 2× this value. |
 
 ## File Structure
 

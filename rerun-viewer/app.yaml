@@ -6,13 +6,16 @@ metadata:
 spec:
   appIcon: "logo_dark_mode.png"
   cellName: cell
-  image: wandelbots.azurecr.io/rerun-gateway:0.1.0
+  image: wandelbots.azurecr.io/rerun-gateway:1.0.2
   port: 8080
   healthPath: /healthz
+  environment:
+    - name: RERUN_MEMORY_LIMIT
+      value: "1000MB"
   resources:
     requests:
       cpu: 100m
-      memory: 256Mi
+      memory: 512Mi
     limits:
       cpu: "2"
-      memory: 1000Mi
+      memory: 2000Mi
