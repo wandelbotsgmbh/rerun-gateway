@@ -20,33 +20,30 @@ The App CRD routes traffic at `/<cell>/<app-name>/*`. Rerun's WASM viewer sends 
 End-to-end request flow for both browser (gRPC-web) and native SDK (gRPC/h2c) clients:
 
 ```mermaid
-flowchart LR
+flowchart TB
     subgraph BROWSER["🌐 Browser"]
-        WASM["WASM Viewer"] -->|"fetch('/rerun.Svc')"| FETCH["Fetch Interceptor"]
-        FETCH --- NOTE["Rewrite → BASE_PATH<br/>Buffer → Uint8Array<br/>credentials: include"]
+        WASM["WASM Viewer"] -->|"fetch /rerun.Svc"| FETCH["Fetch Interceptor<br/>rewrite + buffer + cookie"]
     end
 
-    subgraph INGRESS["Traefik :443"]
-        TLS["TLS + oauth2-proxy"]
-    end
-
-    subgraph PODS["☸ Cluster"]
+    subgraph PODS["☸ Cluster pods"]
         APP["App Pod"]
         LOGGER["Logger Pod"]
     end
 
+    TLS["Traefik :443<br/>TLS + oauth2-proxy"]
+
     subgraph VIEWER["rerun-viewer Pod"]
-        NGINX["Nginx :8080 HTTP/2"] --> MAP{"Content-Type"}
-        MAP -->|"grpc-web"| WEB["proxy_pass<br/>HTTP/1.1 · strips path"]
-        MAP -->|"grpc"| NATIVE["grpc_pass<br/>native h2c"]
+        NGINX["Nginx :8080<br/>HTTP/2"] --> MAP{"Content-Type"}
+        MAP -->|"grpc-web"| WEB["proxy_pass<br/>HTTP/1.1"]
+        MAP -->|"grpc"| NATIVE["grpc_pass<br/>h2c"]
         WEB --> RERUN(["Rerun :9876"])
         NATIVE --> RERUN
     end
 
-    FETCH -->|"HTTPS + cookie"| TLS
-    TLS -->|"HTTP :8080"| NGINX
-    APP -->|"gRPC h2c :8080"| NGINX
-    LOGGER -->|"gRPC h2c :8080"| NGINX
+    FETCH -->|"HTTPS"| TLS
+    TLS -->|"HTTP"| NGINX
+    APP -->|"gRPC h2c"| NGINX
+    LOGGER -->|"gRPC h2c"| NGINX
 ```
 
 Container layout inside the `rerun-viewer` pod (single container, supervised processes):
