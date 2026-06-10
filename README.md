@@ -15,14 +15,53 @@ The App CRD routes traffic at `/<cell>/<app-name>/*`. Rerun's WASM viewer sends 
 - **Nginx**: dual-protocol proxy — gRPC-web (HTTP/1.1) for browsers via `proxy_pass`, native gRPC (HTTP/2) for SDK clients via `grpc_pass`, with unlimited request body size
 - **Supervisord**: manages both nginx and the rerun server process within a single container
 
-```
-Browser (gRPC-web)
-  -> Cloud Ingress (Traefik + oauth2-proxy)
-     -> nginx proxy_pass -> rerun :9876
+## Architecture
 
-Cluster pods (native gRPC over HTTP/2)
-  -> app-rerun-viewer:8080
-     -> nginx grpc_pass -> rerun :9876
+End-to-end request flow for both browser (gRPC-web) and native SDK (gRPC/h2c) clients:
+
+```mermaid
+flowchart LR
+    subgraph BROWSER["🌐 Browser"]
+        WASM["WASM Viewer"] -->|"fetch('/rerun.Svc')"| FETCH["Fetch Interceptor"]
+        FETCH --- NOTE["Rewrite → BASE_PATH<br/>Buffer → Uint8Array<br/>credentials: include"]
+    end
+
+    subgraph INGRESS["Traefik :443"]
+        TLS["TLS + oauth2-proxy"]
+    end
+
+    subgraph PODS["☸ Cluster"]
+        APP["App Pod"]
+        LOGGER["Logger Pod"]
+    end
+
+    subgraph VIEWER["rerun-viewer Pod"]
+        NGINX["Nginx :8080 HTTP/2"] --> MAP{"Content-Type"}
+        MAP -->|"grpc-web"| WEB["proxy_pass<br/>HTTP/1.1 · strips path"]
+        MAP -->|"grpc"| NATIVE["grpc_pass<br/>native h2c"]
+        WEB --> RERUN(["Rerun :9876"])
+        NATIVE --> RERUN
+    end
+
+    FETCH -->|"HTTPS + cookie"| TLS
+    TLS -->|"HTTP :8080"| NGINX
+    APP -->|"gRPC h2c :8080"| NGINX
+    LOGGER -->|"gRPC h2c :8080"| NGINX
+```
+
+Container layout inside the `rerun-viewer` pod (single container, supervised processes):
+
+```mermaid
+flowchart TB
+    subgraph CONTAINER["rerun-gateway container"]
+        SUPER["supervisord (PID 1)"]
+        SUPER --> NGX["nginx<br/>:8080"]
+        SUPER --> RR["rerun server<br/>:9876"]
+        ENTRY["entrypoint.sh"] -.->|"renders from BASE_PATH<br/>+ RERUN_MEMORY_LIMIT"| NGXCFG[/"nginx.conf"/]
+        ENTRY -.->|"renders"| HTML[/"index.html"/]
+        NGXCFG --> NGX
+        HTML --> NGX
+    end
 ```
 
 ## Deploy
@@ -135,6 +174,39 @@ curl -s -X POST "https://<INSTANCE_HOST>/api/v2/cells/cell/apps" \
     "port": 8080
   }'
 ```
+
+## Limitations
+
+### Web viewer requires HTTPS (secure context)
+
+The fetch interceptor relies on Service Worker / modern `fetch` + `ReadableStream` APIs, which browsers only expose in a [secure context](https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts). Loading the viewer over plain HTTP — or over HTTPS with an untrusted certificate that the user has only click-through accepted — disables the interceptor, so gRPC-web requests go out unmodified to `/rerun.Service/*` and are 404'd by the ingress.
+
+This matters in environments where the instance host is fronted by an enterprise TLS-terminating proxy (MITM) using an internal CA:
+
+- **Corporate-managed machines** — the CA is in the system trust store, the browser treats the page as fully secure, the interceptor runs. No action needed.
+- **BYO / unmanaged machines** — the browser shows a cert warning. Clicking "Proceed anyway" loads the page but marks the origin as **non-secure**, and the interceptor is silently disabled.
+
+Workarounds:
+
+1. **Install the corporate root CA** into the OS / browser trust store. This is the only fix that makes the viewer work normally.
+2. **Launch the browser with cert checks disabled** (dev-only, single session):
+
+   ```bash
+   # Chrome / Chromium
+   google-chrome --ignore-certificate-errors --user-data-dir=/tmp/rerun-insecure
+
+   # Firefox: about:config → security.enterprise_roots.enabled = true (after importing CA)
+   ```
+
+   With `--ignore-certificate-errors` Chrome treats the origin as secure, so the interceptor runs.
+3. **Use the native viewer via the local h2c proxy** — bypasses the browser entirely (see [Native viewer](#native-viewer-from-your-machine)).
+
+### Other constraints
+
+- **gRPC-web only in the browser** — HTTP/2 trailers are not exposed to JS, so the WASM viewer must go through nginx's `proxy_pass` translation. Native gRPC from the browser is not possible.
+- **Traefik downgrades to HTTP/1.1 by default** — the `traefik.ingress.kubernetes.io/service.serversscheme=h2c` annotation on the service is mandatory for native SDK clients going through the ingress.
+- **Single-replica viewer** — Rerun stores recordings in process memory; scaling beyond one replica would split recordings across pods. Use `RERUN_MEMORY_LIMIT` to bound retention instead.
+- **No persistence** — restarting the pod drops all recordings.
 
 ## Configuration
 
