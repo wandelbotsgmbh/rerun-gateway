@@ -128,7 +128,7 @@ curl -s -X POST "https://<INSTANCE_HOST>/api/v2/cells/cell/apps" \
     "name": "rerun-logger",
     "app_icon": "app-icon.png",
     "container_image": {
-      "image": "wandelbots.azurecr.io/rerun-logger:0.3.1",
+      "image": "wandelbots.azurecr.io/nova-apps/rerun-logger:1.0.5",
       "secrets": [{"name": "pull-secret-wandelbots-azurecr-io"}]
     },
     "environment": [],

@@ -32,6 +32,8 @@ stages:
 variables:
   SERVICE_NAME: rerun-viewer
   REGISTRY_IMAGE: wandelbots.azurecr.io/nova-apps/rerun-gateway
+  LOGGER_SERVICE_NAME: rerun-logger-test
+  LOGGER_REGISTRY_IMAGE: wandelbots.azurecr.io/nova-apps/rerun-logger
 
 lint:merge-request:
   stage: lint
@@ -67,6 +69,20 @@ build:image:
       --push
       ${SERVICE_NAME}/
 
+build:logger-image:
+  stage: build
+  extends: .docker
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG =~ /^v/
+  script:
+    - docker buildx build
+      --platform linux/amd64
+      -t ${CI_REGISTRY_IMAGE}/${LOGGER_SERVICE_NAME}:${CI_COMMIT_SHORT_SHA}
+      -f ${LOGGER_SERVICE_NAME}/Dockerfile
+      --push
+      ${LOGGER_SERVICE_NAME}/
+
 semantic-release:
   stage: release
   image: wandelbots.azurecr.io/docker.io/library/node:22-alpine
@@ -95,3 +111,17 @@ publish:image:
     - docker pull ${CI_REGISTRY_IMAGE}/${SERVICE_NAME}:${CI_COMMIT_SHORT_SHA}
     - docker tag ${CI_REGISTRY_IMAGE}/${SERVICE_NAME}:${CI_COMMIT_SHORT_SHA} ${REGISTRY_IMAGE}:${VERSION}
     - docker push ${REGISTRY_IMAGE}:${VERSION}
+
+publish:logger-image:
+  stage: publish
+  extends: .docker
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v/
+  needs:
+    - build:logger-image
+  script:
+    - docker login -u $PUBLIC_REGISTRY_CI_SCOPE_NOVA_APPS_USERNAME -p $PUBLIC_REGISTRY_CI_SCOPE_NOVA_APPS_PASSWORD $PUBLIC_REGISTRY_HOST
+    - VERSION=${CI_COMMIT_TAG#v}
+    - docker pull ${CI_REGISTRY_IMAGE}/${LOGGER_SERVICE_NAME}:${CI_COMMIT_SHORT_SHA}
+    - docker tag ${CI_REGISTRY_IMAGE}/${LOGGER_SERVICE_NAME}:${CI_COMMIT_SHORT_SHA} ${LOGGER_REGISTRY_IMAGE}:${VERSION}
+    - docker push ${LOGGER_REGISTRY_IMAGE}:${VERSION}
