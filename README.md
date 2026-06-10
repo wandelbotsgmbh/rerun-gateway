@@ -34,22 +34,15 @@ Images must be built for `linux/amd64` and use unique version tags (the cluster 
 ```bash
 az acr login --name wandelbots
 docker buildx build --platform linux/amd64 \
-  -t wandelbots.azurecr.io/rerun-gateway:0.1.8 \
+  -t wandelbots.azurecr.io/nova-apps/rerun-gateway:0.1.8 \
   --push ./rerun-viewer/
 ```
 
 ### 1b. Build via CI (automatic)
 
-On merge to `main`, the GitLab CI pipeline builds and pushes `wandelbots.azurecr.io/rerun-gateway:<short-sha>`.
+On merge to `main`, semantic-release creates a version tag automatically based on conventional commits.
 
-To publish a versioned release, create a git tag:
-
-```bash
-git tag v0.2.0
-git push --tags
-```
-
-CI will push `:<version>`.
+CI will build the image and publish `wandelbots.azurecr.io/nova-apps/rerun-gateway:<version>`.
 
 ### 2. Deploy via API
 
@@ -138,6 +131,7 @@ curl -s -X POST "https://<INSTANCE_HOST>/api/v2/cells/cell/apps" \
       "image": "wandelbots.azurecr.io/rerun-logger:0.3.1",
       "secrets": [{"name": "pull-secret-wandelbots-azurecr-io"}]
     },
+    "environment": [],
     "port": 8080
   }'
 ```
