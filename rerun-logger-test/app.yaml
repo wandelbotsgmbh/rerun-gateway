@@ -6,7 +6,7 @@ metadata:
 spec:
   appIcon: "app-icon.png"
   cellName: cell
-  image: wandelbots.azurecr.io/rerun-logger:0.3.1
+  image: wandelbots.azurecr.io/nova-apps/rerun-logger:1.0.5
   port: 8080
   healthPath: /
   resources:
