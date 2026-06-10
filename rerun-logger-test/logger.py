@@ -35,10 +35,23 @@ health_status = {
 
 class Health(BaseHTTPRequestHandler):
     def do_GET(self):
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.end_headers()
-        self.wfile.write(json.dumps(health_status, indent=2).encode())
+        if self.path == "/app-icon.png":
+            try:
+                with open("/app-icon.png", "rb") as f:
+                    data = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", "image/png")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+            except FileNotFoundError:
+                self.send_response(404)
+                self.end_headers()
+        else:
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(health_status, indent=2).encode())
 
     def log_message(self, *args):
         pass

@@ -134,8 +134,8 @@ http {
         }
 
         # Serve the app icon locally
-        location = __BASE_PATH__/logo_dark_mode.png {
-            alias /opt/rerun-gateway/logo_dark_mode.png;
+        location = __BASE_PATH__/app-icon.png {
+            alias /opt/rerun-gateway/app-icon.png;
         }
 
         # Proxy all other base path requests to rerun web viewer
