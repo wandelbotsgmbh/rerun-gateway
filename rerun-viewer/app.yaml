@@ -11,7 +11,7 @@ spec:
   healthPath: /healthz
   environment:
     - name: RERUN_MEMORY_LIMIT
-      value: "1000MB"
+      value: "500MB"
   resources:
     requests:
       cpu: 100m

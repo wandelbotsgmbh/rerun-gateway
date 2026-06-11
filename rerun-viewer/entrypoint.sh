@@ -4,9 +4,9 @@ set -e
 # BASE_PATH is set by the App CRD operator (e.g., /cell/rerun-viewer)
 BASE_PATH="${BASE_PATH:-/cell/rerun-viewer}"
 # Memory limit for the rerun gRPC server buffer (drops oldest data when reached)
-# During GC, peak process memory = store_limit + ~300MB overhead + GC working set.
-# At 1GB store limit, peak is ~1.5GB — requires pod memory_limit >= 2000Mi.
-RERUN_MEMORY_LIMIT="${RERUN_MEMORY_LIMIT:-1000MB}"
+# Overhead ratio is ~3.3x (fragmentation + Arrow buffers + GC working set).
+# At 500MB store limit, peak RSS is ~1650MB — safely within pod memory_limit of 2000Mi.
+RERUN_MEMORY_LIMIT="${RERUN_MEMORY_LIMIT:-500MB}"
 
 echo "Starting rerun-gateway with BASE_PATH=$BASE_PATH RERUN_MEMORY_LIMIT=$RERUN_MEMORY_LIMIT"
 
