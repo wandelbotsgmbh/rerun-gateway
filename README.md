@@ -70,7 +70,7 @@ Images must be built for `linux/amd64` and use unique version tags (the cluster 
 ```bash
 az acr login --name wandelbots
 docker buildx build --platform linux/amd64 \
-  -t wandelbots.azurecr.io/nova-apps/rerun-gateway:0.1.8 \
+  -t wandelbots.azurecr.io/nova-apps/rerun-gateway:1.0.5 \
   --push ./rerun-viewer/
 ```
 
@@ -92,7 +92,7 @@ curl -s -X POST "https://<INSTANCE_HOST>/api/v2/cells/cell/apps" \
     "name": "rerun-viewer",
     "app_icon": "app-icon.png",
     "container_image": {
-      "image": "wandelbots.azurecr.io/nova-apps/rerun-gateway:1.0.2",
+      "image": "wandelbots.azurecr.io/nova-apps/rerun-gateway:1.0.5",
       "secrets": [{"name": "pull-secret-wandelbots-azurecr-io"}]
     },
     "environment": [
