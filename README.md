@@ -96,7 +96,7 @@ curl -s -X POST "https://<INSTANCE_HOST>/api/v2/cells/cell/apps" \
       "secrets": [{"name": "pull-secret-wandelbots-azurecr-io"}]
     },
     "environment": [
-      {"name": "RERUN_MEMORY_LIMIT", "value": "1000MB"}
+      {"name": "RERUN_MEMORY_LIMIT", "value": "500MB"}
     ],
     "resources": {
       "memory_limit": "2000Mi"
@@ -210,7 +210,7 @@ Workarounds:
 | Environment Variable | Default | Description |
 |---------------------|---------|-------------|
 | `BASE_PATH` | `/cell/rerun-viewer` | Set automatically by the App CRD operator |
-| `RERUN_MEMORY_LIMIT` | `1000MB` | Max memory for stored data (oldest dropped when exceeded). Pod `memory_limit` should be at least 2× this value. |
+| `RERUN_MEMORY_LIMIT` | `500MB` | Max memory for stored data (oldest dropped when exceeded). Pod `memory_limit` should be at least 3.3× this value due to fragmentation overhead. |
 
 ## File Structure
 
