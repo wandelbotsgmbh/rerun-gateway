@@ -15,6 +15,14 @@ http {
     # for rerun SDK WriteMessages which sends ~1MB+ batches)
     client_max_body_size 0;
 
+    # Long-lived gRPC streams (e.g. rerun SDK WriteMessages) can sit idle between
+    # batches. Bump every timeout to nginx's practical maximum (~24d, the
+    # ngx_msec_t / int32 ceiling) so idle gaps never trigger 408 / stream reset.
+    client_body_timeout   24d;
+    client_header_timeout 24d;
+    keepalive_timeout     24d;
+    send_timeout          24d;
+
     client_body_temp_path /tmp/nginx-body;
     proxy_temp_path /tmp/nginx-proxy;
     fastcgi_temp_path /tmp/nginx-fastcgi;
@@ -65,8 +73,8 @@ http {
             proxy_set_header Connection "";
             proxy_buffering off;
             proxy_request_buffering off;
-            proxy_read_timeout 86400s;
-            proxy_send_timeout 86400s;
+            proxy_read_timeout 24d;
+            proxy_send_timeout 24d;
             chunked_transfer_encoding on;
 
             # CORS headers
@@ -94,8 +102,8 @@ http {
             proxy_set_header Connection "";
             proxy_buffering off;
             proxy_request_buffering off;
-            proxy_read_timeout 86400s;
-            proxy_send_timeout 86400s;
+            proxy_read_timeout 24d;
+            proxy_send_timeout 24d;
         }
 
         # Internal named location for native gRPC via base path
@@ -104,22 +112,22 @@ http {
             # Rewrite strips __BASE_PATH__ prefix, then grpc_pass forwards
             rewrite ^__BASE_PATH__/(.*)$ /$1 break;
             grpc_pass grpc://127.0.0.1:9876;
-            grpc_read_timeout 86400s;
-            grpc_send_timeout 86400s;
+            grpc_read_timeout 24d;
+            grpc_send_timeout 24d;
         }
 
         # Native gRPC from internal cluster clients (HTTP/2, no base path prefix)
         location ~ ^/(rerun\..*)$ {
             grpc_pass grpc://127.0.0.1:9876;
-            grpc_read_timeout 86400s;
-            grpc_send_timeout 86400s;
+            grpc_read_timeout 24d;
+            grpc_send_timeout 24d;
         }
 
         # /proxy endpoint without base path for internal SDK connections (HTTP/2 gRPC)
         location ~ ^/proxy(/.*)?$ {
             grpc_pass grpc://127.0.0.1:9876;
-            grpc_read_timeout 86400s;
-            grpc_send_timeout 86400s;
+            grpc_read_timeout 24d;
+            grpc_send_timeout 24d;
         }
 
         # Redirect base path without trailing slash to with trailing slash
