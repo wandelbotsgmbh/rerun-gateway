@@ -172,6 +172,77 @@ curl -s -X POST "https://<INSTANCE_HOST>/api/v2/cells/cell/apps" \
   }'
 ```
 
+## Known issues
+
+### Idle gRPC streams get killed by middleboxes (rerun SDK has no keepalive)
+
+The rerun SDK opens a single long-lived `WriteMessages` HTTP/2 stream
+in `connect_grpc()` and pushes batches as data flows. Between batches
+the stream is idle. The SDK does **not** send HTTP/2 PINGs and does
+**not** enable TCP keepalive — verified against rerun `0.33.0` and
+`main` in `crates/store/re_grpc_client/src/write.rs` (the
+`MessageProxyService` client builds a bare `tonic::Endpoint` with no
+`http2_keep_alive_interval` / `keep_alive_while_idle` / `tcp_keepalive`).
+The server side (`re_grpc_server`) does not enable HTTP/2 keepalive
+either. There is no Python / Rust API to turn it on.
+
+Consequence: any L4/L7 hop in the path with an idle timeout silently
+tears the connection down, and the SDK only notices on the next
+`rr.log()` call, which fails with:
+
+```
+h2 protocol error: http2 error
+```
+
+Common idle-timeout offenders in the path:
+
+| Hop | Default idle timeout | Tunable? |
+|---|---|---|
+| nginx (`client_body_timeout`) | 60s | yes — set to `24d` in this repo |
+| nginx (`proxy_/grpc_*_timeout`, `keepalive_timeout`, `send_timeout`) | 60–75s | yes — `24d` in this repo |
+| Traefik `idleTimeout` | 180s | yes (cell-level) |
+| Azure LB | 4 min (max 30 min) | partially |
+| AWS NLB | 350s | no |
+| conntrack `nf_conntrack_tcp_timeout_established` | 5d | yes (node-level) |
+
+The nginx ceiling (`ngx_msec_t`, int32 ms) is **~24 days** — see
+`rerun-viewer/nginx.conf.template`. Larger values (e.g. `365d`) are
+rejected by the config parser.
+
+#### Recommended workaround: SDK-side heartbeat
+
+Until the upstream rerun client/server expose keepalive (issue draft:
+[`docs/upstream-rerun-keepalive-issue.md`](docs/upstream-rerun-keepalive-issue.md)),
+emit a cheap periodic log call from the SDK to keep the stream
+non-idle from every middlebox's POV:
+
+```python
+import threading, time, rerun as rr
+
+rr.init("my_app", spawn=False)
+rr.connect_grpc("rerun+http://app-rerun-viewer:8080/proxy")
+
+def _keepalive() -> None:
+    while True:
+        rr.log("internal/keepalive", rr.Scalars([0.0]))
+        time.sleep(30)  # << any middlebox idle timeout in the path
+
+threading.Thread(target=_keepalive, daemon=True).start()
+```
+
+30s is conservative and well under every default in the table above.
+Combined with this repo's `24d` nginx timeouts, in-cluster
+`pod ↔ rerun-viewer` traffic survives indefinitely; with a 30s
+heartbeat, native-viewer-from-laptop sessions also survive Traefik /
+Azure LB idle timeouts.
+
+#### Why not just bump every nginx timeout?
+
+We do — see `rerun-viewer/nginx.conf.template`. But nginx caps at
+~24d, and you don't control Traefik / cloud LB / conntrack on the user's
+path. A keepalive PING (or an app-level heartbeat) is the only fix
+that's robust regardless of the path. This repo does both.
+
 ## Limitations
 
 ### Web viewer requires HTTPS (secure context)
