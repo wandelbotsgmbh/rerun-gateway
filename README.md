@@ -286,7 +286,7 @@ Workarounds:
 ## File Structure
 
 ```
-.gitlab-ci.yml            # CI pipeline: build, lint, publish
+.github/workflows/ci.yml  # CI pipeline: lint, build, release, publish
 rerun-viewer/
   Dockerfile              # python:3.11-slim + nginx + supervisor + rerun-sdk 0.33.0
   entrypoint.sh           # Generates configs from BASE_PATH/RERUN_MEMORY_LIMIT env
