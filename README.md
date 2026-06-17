@@ -68,9 +68,9 @@ flowchart TB
 Images must be built for `linux/amd64` and use unique version tags (the cluster does not re-pull the same tag):
 
 ```bash
-az acr login --name wandelbots
+echo "$GITHUB_TOKEN" | docker login ghcr.io -u <your-gh-user> --password-stdin
 docker buildx build --platform linux/amd64 \
-  -t wandelbots.azurecr.io/nova-apps/rerun-gateway:1.1.2 \
+  -t ghcr.io/wandelbotsgmbh/rerun-gateway:1.1.2 \
   --push ./rerun-viewer/
 ```
 
@@ -78,7 +78,7 @@ docker buildx build --platform linux/amd64 \
 
 On merge to `main`, semantic-release creates a version tag automatically based on conventional commits.
 
-CI will build the image and publish `wandelbots.azurecr.io/nova-apps/rerun-gateway:<version>`.
+CI will build the image and publish `ghcr.io/wandelbotsgmbh/rerun-gateway:<version>`.
 
 ### 2. Deploy via API
 
@@ -92,8 +92,7 @@ curl -s -X POST "https://<INSTANCE_HOST>/api/v2/cells/cell/apps" \
     "name": "rerun-viewer",
     "app_icon": "app-icon.png",
     "container_image": {
-      "image": "wandelbots.azurecr.io/nova-apps/rerun-gateway:1.1.2",
-      "secrets": [{"name": "pull-secret-wandelbots-azurecr-io"}]
+      "image": "ghcr.io/wandelbotsgmbh/rerun-gateway:1.1.2"
     },
     "environment": [
       {"name": "RERUN_MEMORY_LIMIT", "value": "500MB"}
@@ -164,8 +163,7 @@ curl -s -X POST "https://<INSTANCE_HOST>/api/v2/cells/cell/apps" \
     "name": "rerun-logger",
     "app_icon": "app-icon.png",
     "container_image": {
-      "image": "wandelbots.azurecr.io/nova-apps/rerun-logger:1.1.2",
-      "secrets": [{"name": "pull-secret-wandelbots-azurecr-io"}]
+      "image": "ghcr.io/wandelbotsgmbh/rerun-logger:1.1.2"
     },
     "environment": [],
     "port": 8080

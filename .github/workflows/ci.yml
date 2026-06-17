@@ -13,12 +13,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  REGISTRY: wandelbots.azurecr.io
-  REGISTRY_IMAGE_BASE: wandelbots.azurecr.io/nova-apps
-  VIEWER_NAME: rerun-viewer
-  LOGGER_NAME: rerun-logger-test
-  VIEWER_PUBLIC_IMAGE: wandelbots.azurecr.io/nova-apps/rerun-gateway
-  LOGGER_PUBLIC_IMAGE: wandelbots.azurecr.io/nova-apps/rerun-logger
+  REGISTRY: ghcr.io
+  OWNER: ${{ github.repository_owner }}
 
 jobs:
   lint-pr-title:
@@ -44,6 +40,9 @@ jobs:
     name: Build ${{ matrix.image.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
     if: github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork != true)
     strategy:
       fail-fast: false
@@ -52,39 +51,36 @@ jobs:
           - name: rerun-gateway
             context: ./rerun-viewer
             dockerfile: ./rerun-viewer/Dockerfile
-            internal_repo: nova-apps/rerun-gateway/rerun-viewer
-            public_repo: nova-apps/rerun-gateway
+            repo: rerun-gateway
           - name: rerun-logger
             context: ./rerun-logger-test
             dockerfile: ./rerun-logger-test/Dockerfile
-            internal_repo: nova-apps/rerun-gateway/rerun-logger-test
-            public_repo: nova-apps/rerun-logger
+            repo: rerun-logger
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Azure Container Registry
+      - name: Log in to GHCR
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.PUBLIC_REGISTRY_CI_SCOPE_NOVA_APPS_USERNAME }}
-          password: ${{ secrets.PUBLIC_REGISTRY_CI_SCOPE_NOVA_APPS_PASSWORD }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Compute tags
         id: tags
         run: |
           SHORT_SHA="${GITHUB_SHA::8}"
-          INTERNAL="${REGISTRY}/${{ matrix.image.internal_repo }}"
-          PUBLIC="${REGISTRY}/${{ matrix.image.public_repo }}"
-          TAGS="${INTERNAL}:${SHORT_SHA}"
+          IMAGE="${REGISTRY}/${OWNER}/${{ matrix.image.repo }}"
+          TAGS="${IMAGE}:${SHORT_SHA}"
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF#refs/tags/v}"
             TAGS="${TAGS}
-          ${PUBLIC}:${VERSION}"
-            echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          ${IMAGE}:${VERSION}
+          ${IMAGE}:latest"
           fi
           {
             echo "tags<<EOF"
@@ -133,8 +129,8 @@ jobs:
   update-catalog:
     name: Update catalog
     runs-on: ubuntu-latest
-    needs: [build]
     if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build]
     steps:
       - name: Trigger catalog update
         env:
@@ -142,6 +138,7 @@ jobs:
           GITHUB_REF: ${{ github.ref }}
         run: |
           VERSION="${GITHUB_REF#refs/tags/v}"
+          IMAGE="${REGISTRY}/${OWNER}/rerun-gateway:${VERSION}"
           curl -fL \
             -X POST \
             -H "Accept: application/vnd.github.v3+json" \
@@ -149,7 +146,7 @@ jobs:
             https://api.github.com/repos/wandelbotsgmbh/catalog/dispatches \
             -d "{\"event_type\": \"update-entry\",
                  \"client_payload\": {
-                   \"image\":\"${{ env.VIEWER_PUBLIC_IMAGE }}:${VERSION}\",
+                   \"image\":\"${IMAGE}\",
                    \"version\":\"${VERSION}\",
                    \"preview\":\"0\",
                    \"entry\":\"rerun-gateway\"
