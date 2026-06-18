@@ -49,7 +49,7 @@ jobs:
       matrix:
         image:
           - name: rerun-gateway
-            context: ./rerun-viewer
+            context: ./rerun-gateway
           - name: rerun-logger
             context: ./rerun-logger-test
     steps:

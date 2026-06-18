@@ -4,7 +4,7 @@ Draft body for an issue to be filed against
 [`rerun-io/rerun`](https://github.com/rerun-io/rerun) requesting that
 the `MessageProxyService` gRPC client and server expose / enable HTTP/2
 keepalive. Until this lands upstream we have to either tune every
-middlebox in the path (see `rerun-viewer/nginx.conf.template`) or emit
+middlebox in the path (see `rerun-gateway/nginx.conf.template`) or emit
 application-level heartbeats from the SDK (see README → Known issues).
 
 ---

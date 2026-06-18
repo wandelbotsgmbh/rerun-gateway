@@ -71,7 +71,7 @@ Images must be built for `linux/amd64` and use unique version tags (the cluster 
 echo "$GITHUB_TOKEN" | docker login ghcr.io -u <your-gh-user> --password-stdin
 docker buildx build --platform linux/amd64 \
   -t ghcr.io/wandelbotsgmbh/rerun-gateway:1.1.2 \
-  --push ./rerun-viewer/
+  --push ./rerun-gateway/
 ```
 
 ### 1b. Build via CI (automatic)
@@ -147,7 +147,7 @@ kubectl annotate service app-rerun-gateway -n <cell-namespace> \
 
 # Run the local proxy
 brew install nginx
-./rerun-viewer/local-proxy.sh <INSTANCE_HOST>
+./rerun-gateway/local-proxy.sh <INSTANCE_HOST>
 # Then: rerun +http://127.0.0.1:9876/proxy
 ```
 
@@ -204,7 +204,7 @@ Common idle-timeout offenders in the path:
 | conntrack `nf_conntrack_tcp_timeout_established` | 5d | yes (node-level) |
 
 The nginx ceiling (`ngx_msec_t`, int32 ms) is **~24 days** — see
-`rerun-viewer/nginx.conf.template`. Larger values (e.g. `365d`) are
+`rerun-gateway/nginx.conf.template`. Larger values (e.g. `365d`) are
 rejected by the config parser.
 
 #### Recommended workaround: SDK-side heartbeat
@@ -236,7 +236,7 @@ Azure LB idle timeouts.
 
 #### Why not just bump every nginx timeout?
 
-We do — see `rerun-viewer/nginx.conf.template`. But nginx caps at
+We do — see `rerun-gateway/nginx.conf.template`. But nginx caps at
 ~24d, and you don't control Traefik / cloud LB / conntrack on the user's
 path. A keepalive PING (or an app-level heartbeat) is the only fix
 that's robust regardless of the path. This repo does both.
@@ -285,7 +285,7 @@ Workarounds:
 
 ```
 .github/workflows/ci.yml  # CI pipeline: lint, build, release, publish
-rerun-viewer/
+rerun-gateway/
   Dockerfile              # python:3.11-slim + nginx + supervisor + rerun-sdk 0.33.0
   entrypoint.sh           # Generates configs from BASE_PATH/RERUN_MEMORY_LIMIT env
   nginx.conf.template     # Dual-protocol proxy (gRPC-web + native gRPC)
