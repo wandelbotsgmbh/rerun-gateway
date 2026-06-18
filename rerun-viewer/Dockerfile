@@ -1,5 +1,5 @@
 ARG RERUN_SDK_VERSION=0.33.0
-FROM wandelbots.azurecr.io/docker.io/library/python:3.12-slim AS base
+FROM python:3.12-slim AS base
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     nginx \
