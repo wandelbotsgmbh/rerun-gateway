@@ -1,12 +1,12 @@
 apiVersion: wandelbots.com/v1alpha1
 kind: App
 metadata:
-  name: rerun-viewer
+  name: rerun-gateway
   namespace: cell
 spec:
   appIcon: "app-icon.png"
   cellName: cell
-  image: wandelbots.azurecr.io/nova-apps/rerun-gateway:1.0.6
+  image: ghcr.io/wandelbotsgmbh/rerun-gateway:1.1.2
   port: 8080
   healthPath: /healthz
   environment:

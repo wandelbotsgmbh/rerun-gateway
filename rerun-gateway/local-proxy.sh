@@ -12,7 +12,7 @@
 #
 # Prerequisites:
 #   brew install nginx
-#   kubectl annotate service app-rerun-viewer -n cell \
+#   kubectl annotate service app-rerun-gateway -n cell \
 #     "traefik.ingress.kubernetes.io/service.serversscheme=h2c"
 #
 # Usage:
@@ -25,7 +25,7 @@ set -e
 
 CLUSTER_IP="${1:?Usage: $0 <cluster-ip> [local-port] [base-path]}"
 LOCAL_PORT="${2:-9876}"
-BASE_PATH="${3:-/cell/rerun-viewer}"
+BASE_PATH="${3:-/cell/rerun-gateway}"
 TMPDIR=$(mktemp -d)
 
 trap "echo 'Stopping...'; nginx -s stop -p $TMPDIR -c $TMPDIR/nginx.conf 2>/dev/null; rm -rf $TMPDIR" EXIT
@@ -48,8 +48,8 @@ http {
         server_name _;
 
         # Native gRPC from local Rerun viewer -> remote cluster via HTTPS
-        # Rewrites paths: /proxy -> /cell/rerun-viewer/proxy
-        #                 /rerun.Svc/Method -> /cell/rerun-viewer/rerun.Svc/Method
+        # Rewrites paths: /proxy -> /cell/rerun-gateway/proxy
+        #                 /rerun.Svc/Method -> /cell/rerun-gateway/rerun.Svc/Method
         location / {
             grpc_pass grpcs://$CLUSTER_IP:443;
             grpc_ssl_verify off;

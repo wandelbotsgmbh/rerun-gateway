@@ -32,7 +32,7 @@ flowchart TB
 
     TLS["Traefik :443<br/>TLS + oauth2-proxy"]
 
-    subgraph VIEWER["rerun-viewer Pod"]
+    subgraph VIEWER["rerun-gateway Pod"]
         NGINX["Nginx :8080<br/>HTTP/2"] --> MAP{"Content-Type"}
         MAP -->|"grpc-web"| WEB["proxy_pass<br/>HTTP/1.1"]
         MAP -->|"grpc"| NATIVE["grpc_pass<br/>h2c"]
@@ -46,7 +46,7 @@ flowchart TB
     LOGGER -->|"gRPC h2c"| NGINX
 ```
 
-Container layout inside the `rerun-viewer` pod (single container, supervised processes):
+Container layout inside the `rerun-gateway` pod (single container, supervised processes):
 
 ```mermaid
 flowchart TB
@@ -68,17 +68,17 @@ flowchart TB
 Images must be built for `linux/amd64` and use unique version tags (the cluster does not re-pull the same tag):
 
 ```bash
-az acr login --name wandelbots
+echo "$GITHUB_TOKEN" | docker login ghcr.io -u <your-gh-user> --password-stdin
 docker buildx build --platform linux/amd64 \
-  -t wandelbots.azurecr.io/nova-apps/rerun-gateway:1.0.6 \
-  --push ./rerun-viewer/
+  -t ghcr.io/wandelbotsgmbh/rerun-gateway:1.1.2 \
+  --push ./rerun-gateway/
 ```
 
 ### 1b. Build via CI (automatic)
 
 On merge to `main`, semantic-release creates a version tag automatically based on conventional commits.
 
-CI will build the image and publish `wandelbots.azurecr.io/nova-apps/rerun-gateway:<version>`.
+CI will build the image and publish `ghcr.io/wandelbotsgmbh/rerun-gateway:<version>`.
 
 ### 2. Deploy via API
 
@@ -89,11 +89,10 @@ curl -s -X POST "https://<INSTANCE_HOST>/api/v2/cells/cell/apps" \
   -H "Content-Type: application/json" \
   -H "Cookie: _oauth2_proxy=<AUTH_COOKIE>" \
   -d '{
-    "name": "rerun-viewer",
+    "name": "rerun-gateway",
     "app_icon": "app-icon.png",
     "container_image": {
-      "image": "wandelbots.azurecr.io/nova-apps/rerun-gateway:1.0.6",
-      "secrets": [{"name": "pull-secret-wandelbots-azurecr-io"}]
+      "image": "ghcr.io/wandelbotsgmbh/rerun-gateway:1.1.2"
     },
     "environment": [
       {"name": "RERUN_MEMORY_LIMIT", "value": "500MB"}
@@ -108,7 +107,7 @@ curl -s -X POST "https://<INSTANCE_HOST>/api/v2/cells/cell/apps" \
 ### 4. Delete the app
 
 ```bash
-curl -s -X DELETE "https://<INSTANCE_HOST>/api/v2/cells/cell/apps/rerun-viewer" \
+curl -s -X DELETE "https://<INSTANCE_HOST>/api/v2/cells/cell/apps/rerun-gateway" \
   -H "Cookie: _oauth2_proxy=<AUTH_COOKIE>"
 ```
 
@@ -117,7 +116,7 @@ curl -s -X DELETE "https://<INSTANCE_HOST>/api/v2/cells/cell/apps/rerun-viewer" 
 ### Web viewer
 
 ```
-https://<INSTANCE_HOST>/cell/rerun-viewer/
+https://<INSTANCE_HOST>/cell/rerun-gateway/
 ```
 
 The viewer auto-connects to the rerun server via gRPC-web. Data appears as soon as any logger starts sending.
@@ -129,7 +128,7 @@ Use the short service name (no FQDN needed within the same namespace):
 ```python
 import rerun as rr
 rr.init("my_recording", spawn=False)
-rr.connect_grpc("rerun+http://app-rerun-viewer:8080/proxy")
+rr.connect_grpc("rerun+http://app-rerun-gateway:8080/proxy")
 rr.log("world/points", rr.Points3D([[1, 2, 3]]))
 ```
 
@@ -143,12 +142,12 @@ enable HTTP/2 (h2c) passthrough. Without kubectl, use the web viewer.
 
 ```bash
 # One-time: enable h2c on the service (requires kubectl)
-kubectl annotate service app-rerun-viewer -n <cell-namespace> \
+kubectl annotate service app-rerun-gateway -n <cell-namespace> \
   "traefik.ingress.kubernetes.io/service.serversscheme=h2c"
 
 # Run the local proxy
 brew install nginx
-./rerun-viewer/local-proxy.sh <INSTANCE_HOST>
+./rerun-gateway/local-proxy.sh <INSTANCE_HOST>
 # Then: rerun +http://127.0.0.1:9876/proxy
 ```
 
@@ -164,8 +163,7 @@ curl -s -X POST "https://<INSTANCE_HOST>/api/v2/cells/cell/apps" \
     "name": "rerun-logger",
     "app_icon": "app-icon.png",
     "container_image": {
-      "image": "wandelbots.azurecr.io/nova-apps/rerun-logger:1.0.5",
-      "secrets": [{"name": "pull-secret-wandelbots-azurecr-io"}]
+      "image": "ghcr.io/wandelbotsgmbh/rerun-logger:1.1.2"
     },
     "environment": [],
     "port": 8080
@@ -206,7 +204,7 @@ Common idle-timeout offenders in the path:
 | conntrack `nf_conntrack_tcp_timeout_established` | 5d | yes (node-level) |
 
 The nginx ceiling (`ngx_msec_t`, int32 ms) is **~24 days** — see
-`rerun-viewer/nginx.conf.template`. Larger values (e.g. `365d`) are
+`rerun-gateway/nginx.conf.template`. Larger values (e.g. `365d`) are
 rejected by the config parser.
 
 #### Recommended workaround: SDK-side heartbeat
@@ -220,7 +218,7 @@ non-idle from every middlebox's POV:
 import threading, time, rerun as rr
 
 rr.init("my_app", spawn=False)
-rr.connect_grpc("rerun+http://app-rerun-viewer:8080/proxy")
+rr.connect_grpc("rerun+http://app-rerun-gateway:8080/proxy")
 
 def _keepalive() -> None:
     while True:
@@ -232,13 +230,13 @@ threading.Thread(target=_keepalive, daemon=True).start()
 
 30s is conservative and well under every default in the table above.
 Combined with this repo's `24d` nginx timeouts, in-cluster
-`pod ↔ rerun-viewer` traffic survives indefinitely; with a 30s
+`pod ↔ rerun-gateway` traffic survives indefinitely; with a 30s
 heartbeat, native-viewer-from-laptop sessions also survive Traefik /
 Azure LB idle timeouts.
 
 #### Why not just bump every nginx timeout?
 
-We do — see `rerun-viewer/nginx.conf.template`. But nginx caps at
+We do — see `rerun-gateway/nginx.conf.template`. But nginx caps at
 ~24d, and you don't control Traefik / cloud LB / conntrack on the user's
 path. A keepalive PING (or an app-level heartbeat) is the only fix
 that's robust regardless of the path. This repo does both.
@@ -280,14 +278,14 @@ Workarounds:
 
 | Environment Variable | Default | Description |
 |---------------------|---------|-------------|
-| `BASE_PATH` | `/cell/rerun-viewer` | Set automatically by the App CRD operator |
+| `BASE_PATH` | `/cell/rerun-gateway` | Set automatically by the App CRD operator (derived from the app name in the deploy request) |
 | `RERUN_MEMORY_LIMIT` | `500MB` | Max memory for stored data (oldest dropped when exceeded). Pod `memory_limit` should be at least 3.3× this value due to fragmentation overhead. |
 
 ## File Structure
 
 ```
-.gitlab-ci.yml            # CI pipeline: build, lint, publish
-rerun-viewer/
+.github/workflows/ci.yml  # CI pipeline: lint, build, release, publish
+rerun-gateway/
   Dockerfile              # python:3.11-slim + nginx + supervisor + rerun-sdk 0.33.0
   entrypoint.sh           # Generates configs from BASE_PATH/RERUN_MEMORY_LIMIT env
   nginx.conf.template     # Dual-protocol proxy (gRPC-web + native gRPC)
@@ -297,6 +295,6 @@ rerun-viewer/
   local-proxy.sh          # Local nginx wrapper for native viewer access
 rerun-logger-test/
   Dockerfile              # Test logger image
-  logger.py               # Logs random 3D points to rerun-viewer
+  logger.py               # Logs random 3D points to rerun-gateway
   app.yaml                # App CRD manifest
 ```

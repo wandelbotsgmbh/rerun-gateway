@@ -10,7 +10,7 @@ import json
 from datetime import datetime, timezone
 
 # --- Configuration ---
-VIEWER_URL = os.environ.get("VIEWER_URL", "rerun+http://app-rerun-viewer:8080/proxy")
+VIEWER_URL = os.environ.get("VIEWER_URL", "rerun+http://app-rerun-gateway:8080/proxy")
 # Heavier data: 1000 points per frame (10x more), faster rate (100ms instead of 500ms)
 NUM_POINTS = int(os.environ.get("NUM_POINTS", "1000"))
 FRAME_INTERVAL = float(os.environ.get("FRAME_INTERVAL", "0.1"))  # 100ms = 10 FPS
