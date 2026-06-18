@@ -32,7 +32,7 @@ flowchart TB
 
     TLS["Traefik :443<br/>TLS + oauth2-proxy"]
 
-    subgraph VIEWER["rerun-viewer Pod"]
+    subgraph VIEWER["rerun-gateway Pod"]
         NGINX["Nginx :8080<br/>HTTP/2"] --> MAP{"Content-Type"}
         MAP -->|"grpc-web"| WEB["proxy_pass<br/>HTTP/1.1"]
         MAP -->|"grpc"| NATIVE["grpc_pass<br/>h2c"]
@@ -46,7 +46,7 @@ flowchart TB
     LOGGER -->|"gRPC h2c"| NGINX
 ```
 
-Container layout inside the `rerun-viewer` pod (single container, supervised processes):
+Container layout inside the `rerun-gateway` pod (single container, supervised processes):
 
 ```mermaid
 flowchart TB
@@ -89,7 +89,7 @@ curl -s -X POST "https://<INSTANCE_HOST>/api/v2/cells/cell/apps" \
   -H "Content-Type: application/json" \
   -H "Cookie: _oauth2_proxy=<AUTH_COOKIE>" \
   -d '{
-    "name": "rerun-viewer",
+    "name": "rerun-gateway",
     "app_icon": "app-icon.png",
     "container_image": {
       "image": "ghcr.io/wandelbotsgmbh/rerun-gateway:1.1.2"
@@ -107,7 +107,7 @@ curl -s -X POST "https://<INSTANCE_HOST>/api/v2/cells/cell/apps" \
 ### 4. Delete the app
 
 ```bash
-curl -s -X DELETE "https://<INSTANCE_HOST>/api/v2/cells/cell/apps/rerun-viewer" \
+curl -s -X DELETE "https://<INSTANCE_HOST>/api/v2/cells/cell/apps/rerun-gateway" \
   -H "Cookie: _oauth2_proxy=<AUTH_COOKIE>"
 ```
 
@@ -116,7 +116,7 @@ curl -s -X DELETE "https://<INSTANCE_HOST>/api/v2/cells/cell/apps/rerun-viewer" 
 ### Web viewer
 
 ```
-https://<INSTANCE_HOST>/cell/rerun-viewer/
+https://<INSTANCE_HOST>/cell/rerun-gateway/
 ```
 
 The viewer auto-connects to the rerun server via gRPC-web. Data appears as soon as any logger starts sending.
@@ -128,7 +128,7 @@ Use the short service name (no FQDN needed within the same namespace):
 ```python
 import rerun as rr
 rr.init("my_recording", spawn=False)
-rr.connect_grpc("rerun+http://app-rerun-viewer:8080/proxy")
+rr.connect_grpc("rerun+http://app-rerun-gateway:8080/proxy")
 rr.log("world/points", rr.Points3D([[1, 2, 3]]))
 ```
 
@@ -142,7 +142,7 @@ enable HTTP/2 (h2c) passthrough. Without kubectl, use the web viewer.
 
 ```bash
 # One-time: enable h2c on the service (requires kubectl)
-kubectl annotate service app-rerun-viewer -n <cell-namespace> \
+kubectl annotate service app-rerun-gateway -n <cell-namespace> \
   "traefik.ingress.kubernetes.io/service.serversscheme=h2c"
 
 # Run the local proxy
@@ -218,7 +218,7 @@ non-idle from every middlebox's POV:
 import threading, time, rerun as rr
 
 rr.init("my_app", spawn=False)
-rr.connect_grpc("rerun+http://app-rerun-viewer:8080/proxy")
+rr.connect_grpc("rerun+http://app-rerun-gateway:8080/proxy")
 
 def _keepalive() -> None:
     while True:
@@ -230,7 +230,7 @@ threading.Thread(target=_keepalive, daemon=True).start()
 
 30s is conservative and well under every default in the table above.
 Combined with this repo's `24d` nginx timeouts, in-cluster
-`pod ↔ rerun-viewer` traffic survives indefinitely; with a 30s
+`pod ↔ rerun-gateway` traffic survives indefinitely; with a 30s
 heartbeat, native-viewer-from-laptop sessions also survive Traefik /
 Azure LB idle timeouts.
 
@@ -278,7 +278,7 @@ Workarounds:
 
 | Environment Variable | Default | Description |
 |---------------------|---------|-------------|
-| `BASE_PATH` | `/cell/rerun-viewer` | Set automatically by the App CRD operator |
+| `BASE_PATH` | `/cell/rerun-gateway` | Set automatically by the App CRD operator (derived from the app name in the deploy request) |
 | `RERUN_MEMORY_LIMIT` | `500MB` | Max memory for stored data (oldest dropped when exceeded). Pod `memory_limit` should be at least 3.3× this value due to fragmentation overhead. |
 
 ## File Structure
@@ -295,6 +295,6 @@ rerun-viewer/
   local-proxy.sh          # Local nginx wrapper for native viewer access
 rerun-logger-test/
   Dockerfile              # Test logger image
-  logger.py               # Logs random 3D points to rerun-viewer
+  logger.py               # Logs random 3D points to rerun-gateway
   app.yaml                # App CRD manifest
 ```
