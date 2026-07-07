@@ -78,7 +78,7 @@ docker buildx build --platform linux/amd64 \
 
 On merge to `main`, semantic-release creates a version tag automatically based on conventional commits.
 
-CI will build the image and publish `ghcr.io/wandelbotsgmbh/rerun-gateway:<version>`.
+CI builds and publishes the image to GHCR as `ghcr.io/wandelbotsgmbh/rerun-gateway:<version>`. Cluster nodes pull it via the ACR proxy at `wandelbots.azurecr.io/ghcr.io/wandelbotsgmbh/rerun-gateway:<version>` (default token, no per-cluster GHCR credentials required) — reference the proxy path in deployments.
 
 ### 2. Deploy via API
 
@@ -92,7 +92,7 @@ curl -s -X POST "https://<INSTANCE_HOST>/api/v2/cells/cell/apps" \
     "name": "rerun-gateway",
     "app_icon": "app-icon.png",
     "container_image": {
-      "image": "ghcr.io/wandelbotsgmbh/rerun-gateway:1.1.2"
+      "image": "wandelbots.azurecr.io/ghcr.io/wandelbotsgmbh/rerun-gateway:1.0.0"
     },
     "environment": [
       {"name": "RERUN_MEMORY_LIMIT", "value": "500MB"}
@@ -163,7 +163,7 @@ curl -s -X POST "https://<INSTANCE_HOST>/api/v2/cells/cell/apps" \
     "name": "rerun-logger",
     "app_icon": "app-icon.png",
     "container_image": {
-      "image": "ghcr.io/wandelbotsgmbh/rerun-logger:1.1.2"
+      "image": "wandelbots.azurecr.io/ghcr.io/wandelbotsgmbh/rerun-logger:1.0.0"
     },
     "environment": [],
     "port": 8080
