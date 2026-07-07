@@ -41,35 +41,38 @@ wandelbots.azurecr.io/rerun-gateway:0.26.2-test
 
 ### 1. Deploy the rerun-gateway app (0.26.2)
 
-`<HOST>` = your instance host (e.g. `172.31.10.154`). `<COOKIE>` = the `_oauth2_proxy`
-auth cookie (omit the `Cookie` header on local/unauthenticated instances).
+No terminal or auth cookies needed — use the instance's built-in **Swagger UI**, an
+interactive web form for the API. `<HOST>` = your instance host (e.g. `172.31.10.154`).
 
-**Via the Apps API** (v2):
+1. Open the API explorer in your browser (also linked from the instance home screen):
 
-```bash
-curl -s -X POST "http://<HOST>/api/v2/cells/cell/apps" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "rerun-gateway",
-    "app_icon": "app-icon.png",
-    "container_image": { "image": "wandelbots.azurecr.io/rerun-gateway:0.26.2-test" },
-    "environment": [ {"name": "RERUN_MEMORY_LIMIT", "value": "500MB"} ],
-    "resources": { "memory_limit": "2000Mi" },
-    "port": 8080
-  }'
-```
+   ```
+   https://<HOST>/api/v2/ui
+   ```
 
-Wait until it is running:
+2. If your instance requires login, click **Authorize** (top right) and paste the
+   access token from the Developer Portal. (Local/unauthenticated instances skip this.)
+3. Find **`POST /cells/{cell}/apps`** ("Install an app"), click it, then **Try it out**.
+4. Set `cell` to `cell` and paste this into the request body, then click **Execute**:
 
-```bash
-curl -s "http://<HOST>/api/v2/cells/cell/apps"        # -> ["rerun-gateway"]
-```
+   ```json
+   {
+     "name": "rerun-gateway",
+     "app_icon": "app-icon.png",
+     "container_image": { "image": "wandelbots.azurecr.io/rerun-gateway:0.26.2-test" },
+     "environment": [ { "name": "RERUN_MEMORY_LIMIT", "value": "500MB" } ],
+     "resources": { "memory_limit": "2000Mi" },
+     "port": 8080
+   }
+   ```
+
+5. Check it is running with **`GET /cells/{cell}/apps`** (`cell` = `cell`) → the response
+   should list `"rerun-gateway"`. To remove it later, use **`DELETE /cells/{cell}/apps/{app}`**
+   with app `rerun-gateway`.
 
 > **novax note:** the `novax` CLI (`wandelbots-nova[novax]`) serves your *programs*
-> locally/in-app; the rerun-gateway itself is a plain container app, so it is installed
-> through the Apps API above (that endpoint is the same App system a novax app is
-> published to). Delete it later with:
-> `curl -s -X DELETE "http://<HOST>/api/v2/cells/cell/apps/rerun-gateway"`.
+> locally/in-app; the rerun-gateway itself is a plain container app, installed through
+> the Apps endpoints above (the same App system a novax app is published to).
 
 ### 2. Install the example dependencies
 
