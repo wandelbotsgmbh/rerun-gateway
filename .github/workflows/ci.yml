@@ -10,7 +10,10 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Only cancel superseded PR runs. On main/tags the release job pushes a
+  # `chore(release)` commit + tag back, which lands in the same concurrency
+  # group — cancelling there would kill the in-progress release/publish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   REGISTRY: ghcr.io
