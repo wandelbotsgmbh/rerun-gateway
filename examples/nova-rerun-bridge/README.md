@@ -145,7 +145,7 @@ uses APIs removed in later Rerun releases (e.g. `rr.Transform3D(clear=...)`, gon
 **The Rerun client and the gateway server must both be on the 0.26.x line.**
 
 The published gateway image and this repo's [`Dockerfile`](../../rerun-gateway/Dockerfile)
-default to `RERUN_SDK_VERSION=0.33.0`, which is **incompatible** with the bridge. A
+default to `RERUN_SDK_VERSION=0.34.1`, which is **incompatible** with the bridge. A
 matching **0.26.2 image has already been built and pushed** to the Wandelbots registry —
 `wandelbots.azurecr.io/rerun-gateway:0.26.2-test` — which is what step 1 deploys.
 
