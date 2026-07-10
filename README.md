@@ -286,7 +286,7 @@ Workarounds:
 ```
 .github/workflows/ci.yml  # CI pipeline: lint, build, release, publish
 rerun-gateway/
-  Dockerfile              # python:3.11-slim + nginx + supervisor + rerun-sdk 0.33.0
+  Dockerfile              # python:3.12-slim + nginx + supervisor + rerun-sdk 0.34.1
   entrypoint.sh           # Generates configs from BASE_PATH/RERUN_MEMORY_LIMIT env
   nginx.conf.template     # Dual-protocol proxy (gRPC-web + native gRPC)
   index.html.template     # Viewer page with fetch interceptor

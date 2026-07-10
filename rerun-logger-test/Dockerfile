@@ -1,4 +1,4 @@
-ARG RERUN_SDK_VERSION=0.33.0
+ARG RERUN_SDK_VERSION=0.34.1
 FROM python:3.12-slim
 ARG RERUN_SDK_VERSION
 RUN pip install --no-cache-dir rerun-sdk==${RERUN_SDK_VERSION} numpy
