@@ -80,6 +80,28 @@ On merge to `main`, semantic-release creates a version tag automatically based o
 
 CI builds and publishes the image to GHCR as `ghcr.io/wandelbotsgmbh/rerun-gateway:<version>`. Cluster nodes pull it via the ACR proxy at `wandelbots.azurecr.io/ghcr.io/wandelbotsgmbh/rerun-gateway:<version>` (default token, no per-cluster GHCR credentials required) — reference the proxy path in deployments.
 
+### 1c. Selecting the rerun version
+
+The rerun version is baked into the image at build time (`RERUN_SDK_VERSION` build arg), so it cannot be changed by a runtime environment variable. Instead, CI builds one image per supported rerun-sdk version:
+
+| Rerun version | Image tag | Notes |
+|---|---|---|
+| `0.36.3` | `rerun-gateway:<version>` | Default — clean tag, this is what the catalog entry points at |
+| `0.35.0` | `rerun-gateway:<version>-rerun-0.35.0` | Pinned variant |
+| `0.34.1` | `rerun-gateway:<version>-rerun-0.34.1` | Pinned variant |
+| `0.33.1` | `rerun-gateway:<version>-rerun-0.33.1` | Pinned variant |
+
+To deploy a non-default rerun version, override the image tag in the deploy request (see below) with the matching `-rerun-<version>` suffix — no rebuild needed. Keep the viewer (this image) and your logger's `rerun-sdk` on the same version.
+
+The supported set lives in the build matrix in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — add or drop a version there. To build a one-off version locally, pass the build arg:
+
+```bash
+docker buildx build --platform linux/amd64 \
+  --build-arg RERUN_SDK_VERSION=0.34.1 \
+  -t ghcr.io/wandelbotsgmbh/rerun-gateway:1.1.2-rerun-0.34.1 \
+  --push ./rerun-gateway/
+```
+
 ### 2. Deploy via API
 
 Use the **v2 API** (snake_case fields, supports `resources.memory_limit`):
@@ -281,12 +303,14 @@ Workarounds:
 | `BASE_PATH` | `/cell/rerun-gateway` | Set automatically by the App CRD operator (derived from the app name in the deploy request) |
 | `RERUN_MEMORY_LIMIT` | `500MB` | Max memory for stored data (oldest dropped when exceeded). Pod `memory_limit` should be at least 3.3× this value due to fragmentation overhead. |
 
+> The rerun **version** is not an environment variable — it is fixed per image at build time. Pick it by choosing the image tag (see [Selecting the rerun version](#1c-selecting-the-rerun-version)).
+
 ## File Structure
 
 ```
 .github/workflows/ci.yml  # CI pipeline: lint, build, release, publish
 rerun-gateway/
-  Dockerfile              # python:3.12-slim + nginx + supervisor + rerun-sdk 0.34.1
+  Dockerfile              # python:3.12-slim + nginx + supervisor + rerun-sdk (default 0.36.3; version is a build arg)
   entrypoint.sh           # Generates configs from BASE_PATH/RERUN_MEMORY_LIMIT env
   nginx.conf.template     # Dual-protocol proxy (gRPC-web + native gRPC)
   index.html.template     # Viewer page with fetch interceptor

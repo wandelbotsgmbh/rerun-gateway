@@ -40,7 +40,7 @@ jobs:
           fi
 
   build:
-    name: Build ${{ matrix.image.name }}
+    name: Build ${{ matrix.name }} (rerun ${{ matrix.rerun_version }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -50,11 +50,34 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image:
+        # rerun-gateway is built once per supported rerun-sdk version so the
+        # rerun version can be picked at deploy time (App CRD image override)
+        # without rebuilding. The NEWEST version is the default: it gets the
+        # clean semver/latest tags and is what the single catalog entry points
+        # at (see update-catalog job). Older versions get a `-rerun-<version>`
+        # tag suffix. To add/drop a supported version, edit this list only.
+        include:
           - name: rerun-gateway
             context: ./rerun-gateway
+            rerun_version: "0.36.3"
+            suffix: ""
+          - name: rerun-gateway
+            context: ./rerun-gateway
+            rerun_version: "0.35.0"
+            suffix: "-rerun-0.35.0"
+          - name: rerun-gateway
+            context: ./rerun-gateway
+            rerun_version: "0.34.1"
+            suffix: "-rerun-0.34.1"
+          - name: rerun-gateway
+            context: ./rerun-gateway
+            rerun_version: "0.33.1"
+            suffix: "-rerun-0.33.1"
+          # Test logger image tracks the default (newest) rerun version only.
           - name: rerun-logger
             context: ./rerun-logger-test
+            rerun_version: "0.36.3"
+            suffix: ""
     steps:
       - uses: actions/checkout@v4
 
@@ -73,7 +96,12 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image.name }}
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.name }}
+          # `suffix` is appended to every tag. Empty for the default (newest)
+          # rerun build → clean `1.2.1` / `latest`; `-rerun-<version>` for the
+          # pinned variants → `1.2.1-rerun-0.34.1` / `latest-rerun-0.34.1`.
+          flavor: |
+            suffix=${{ matrix.suffix }}
           tags: |
             type=ref,event=branch
             type=sha,format=short
@@ -83,14 +111,16 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
-          context: ${{ matrix.image.context }}
-          file: ${{ matrix.image.context }}/Dockerfile
+          context: ${{ matrix.context }}
+          file: ${{ matrix.context }}/Dockerfile
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
+          build-args: |
+            RERUN_SDK_VERSION=${{ matrix.rerun_version }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.image.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image.name }}
+          cache-from: type=gha,scope=${{ matrix.name }}-${{ matrix.rerun_version }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}-${{ matrix.rerun_version }}
 
   ci-summary:
     name: CI Summary
